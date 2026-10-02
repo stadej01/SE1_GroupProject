@@ -21,3 +21,6 @@ __MACOSX/
 .Spotlight-V100/
 .TemporaryItems/
 .Trashes/
+
+# Coursework kept out of future commits
+/Homeworks/
