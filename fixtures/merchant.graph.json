@@ -1,0 +1,156 @@
+{
+  "snapshot_id": "f971c5e4cd361ca2597a2998affbfa42f85ad7453212d8d34dc929682397dd88",
+  "start": "Node_Merchant_Greeting",
+  "nodes": [
+    {
+      "id": "Node_Merchant_Greeting",
+      "category": "shop",
+      "color": "blue",
+      "preview": "Merchant: Ah, welcome back, traveler!",
+      "source_line": 1,
+      "source_end_line": 20
+    },
+    {
+      "id": "Node_Merchant_Annoyed",
+      "category": "shop",
+      "color": "red",
+      "preview": "Merchant: You again? Buy something or leave.",
+      "source_line": 21,
+      "source_end_line": 25
+    },
+    {
+      "id": "Node_Buy_Dagger",
+      "category": "shop",
+      "color": "green",
+      "preview": "Merchant: A fine choice. Anything else?",
+      "source_line": 26,
+      "source_end_line": 32
+    },
+    {
+      "id": "Node_Hand_In_Quest",
+      "category": "quest",
+      "color": "purple",
+      "preview": "Merchant: My amulet! You have my thanks.",
+      "source_line": 33,
+      "source_end_line": 37
+    },
+    {
+      "id": "Node_Browse_Shop",
+      "category": "shop",
+      "color": "blue",
+      "preview": "Merchant: Take your time.",
+      "source_line": 38,
+      "source_end_line": 43
+    },
+    {
+      "id": "Node_Exit",
+      "category": null,
+      "color": null,
+      "preview": "Merchant: Safe travels.",
+      "source_line": 44,
+      "source_end_line": 45
+    }
+  ],
+  "edges": [
+    {
+      "id": "Node_Merchant_Greeting:jump:0",
+      "source": "Node_Merchant_Greeting",
+      "target": "Node_Merchant_Annoyed",
+      "kind": "jump",
+      "label": null,
+      "condition": "talk_count > 5",
+      "source_line": 12
+    },
+    {
+      "id": "Node_Merchant_Greeting:choice:0",
+      "source": "Node_Merchant_Greeting",
+      "target": "Node_Buy_Dagger",
+      "kind": "choice",
+      "label": "I'll buy the enchanted dagger (50 Gold).",
+      "condition": "gold >= 50",
+      "source_line": 16
+    },
+    {
+      "id": "Node_Merchant_Greeting:choice:1",
+      "source": "Node_Merchant_Greeting",
+      "target": "Node_Hand_In_Quest",
+      "kind": "choice",
+      "label": "I found your missing amulet!",
+      "condition": "has_stolen_amulet == true",
+      "source_line": 17
+    },
+    {
+      "id": "Node_Merchant_Greeting:choice:2",
+      "source": "Node_Merchant_Greeting",
+      "target": "Node_Browse_Shop",
+      "kind": "choice",
+      "label": "Just browsing your wares.",
+      "condition": null,
+      "source_line": 18
+    },
+    {
+      "id": "Node_Merchant_Greeting:choice:3",
+      "source": "Node_Merchant_Greeting",
+      "target": "Node_Exit",
+      "kind": "choice",
+      "label": "I must be going.",
+      "condition": null,
+      "source_line": 19
+    },
+    {
+      "id": "Node_Merchant_Annoyed:jump:0",
+      "source": "Node_Merchant_Annoyed",
+      "target": "Node_Exit",
+      "kind": "jump",
+      "label": null,
+      "condition": null,
+      "source_line": 24
+    },
+    {
+      "id": "Node_Buy_Dagger:choice:0",
+      "source": "Node_Buy_Dagger",
+      "target": "Node_Browse_Shop",
+      "kind": "choice",
+      "label": "Let me look around more.",
+      "condition": null,
+      "source_line": 30
+    },
+    {
+      "id": "Node_Buy_Dagger:choice:1",
+      "source": "Node_Buy_Dagger",
+      "target": "Node_Exit",
+      "kind": "choice",
+      "label": "That's all.",
+      "condition": null,
+      "source_line": 31
+    },
+    {
+      "id": "Node_Hand_In_Quest:jump:0",
+      "source": "Node_Hand_In_Quest",
+      "target": "Node_Merchant_Greeting",
+      "kind": "jump",
+      "label": null,
+      "condition": null,
+      "source_line": 36
+    },
+    {
+      "id": "Node_Browse_Shop:choice:0",
+      "source": "Node_Browse_Shop",
+      "target": "Node_Merchant_Greeting",
+      "kind": "choice",
+      "label": "Actually, let me talk to you.",
+      "condition": null,
+      "source_line": 41
+    },
+    {
+      "id": "Node_Browse_Shop:choice:1",
+      "source": "Node_Browse_Shop",
+      "target": "Node_Browse_Shop",
+      "kind": "choice",
+      "label": "Keep browsing.",
+      "condition": null,
+      "source_line": 42
+    }
+  ],
+  "diagnostics": []
+}
