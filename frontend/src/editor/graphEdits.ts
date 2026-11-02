@@ -19,6 +19,18 @@ export function appendNode(source: string, id: string, speaker: string, dialogue
   return source.trimEnd() + `\n\n# ${id}\n${speaker}: ${dialogue}\n`;
 }
 
+/** Replace the document-level starting node directives. */
+export function setStartNodes(source: string, ids: string[]): string {
+  const lines = source.split("\n");
+  const retainedLines = lines.filter(line => !/^\s*<!--\s*start:\s*\w+\s*-->\s*$/.test(line));
+  const uniqueIds = [...new Set(ids)];
+  for (const id of uniqueIds) {
+    if (!/^\w+$/.test(id)) throw new Error("Starting node ID must contain only letters, numbers, or underscores.");
+    if (!lines.some(line => line.trim() === `# ${id}`)) throw new Error(`Starting node ${id} does not exist in the current draft.`);
+  }
+  return [...uniqueIds.map(id => `<!-- start: ${id} -->`), ...retainedLines].join("\n");
+}
+
 /** Add a connection inside the source node, before the next header. */
 export function appendConnection(source: string, from: string, to: string, kind: EdgeKind, label: string): string {
   if (!locateNode(source, to)) throw new Error("Target node does not exist.");

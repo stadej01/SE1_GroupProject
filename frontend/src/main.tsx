@@ -4,7 +4,7 @@ import type { Diagnostic, DialogueGraph as Graph, GraphNode, GraphEdge } from ".
 import { DialogueGraph } from "./components/DialogueGraph";
 import { sourceRange } from "./editor/source";
 import { patchNodeSource } from "./editor/patchNode";
-import { appendNode, appendConnection, removeConnection, locateNode } from "./editor/graphEdits";
+import { appendNode, appendConnection, removeConnection, locateNode, setStartNodes } from "./editor/graphEdits";
 import "./editor.css";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -115,6 +115,12 @@ function selectNode(node: GraphNode) {
 function showDiagnostics(diagnostics: Diagnostic[]) {
   diagnosticList.replaceChildren();
   diagnosticPanel.hidden = diagnostics.length === 0;
+  const hasErrors = diagnostics.some(item => item.severity === "error");
+  diagnosticPanel.dataset.severity = hasErrors ? "error" : "warning";
+  element("diagnostics-heading").textContent = hasErrors ? "Markdown needs attention" : "Starting node required";
+  element("diagnostics-help").textContent = hasErrors
+    ? "You can still save this draft. Fix these issues before generating the graph."
+    : "Select a starting node before validating or playtesting the dialogue.";
   for (const diagnostic of diagnostics) {
     const li = document.createElement("li");
     const text = `${diagnostic.line ? `Line ${diagnostic.line}: ` : ""}${diagnostic.message}`;
@@ -175,6 +181,9 @@ async function parse() {
     graphCount.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} connections`;
     parseStatus.textContent = "Graph matches this Markdown";
     showDiagnostics(graph.diagnostics);
+    if (graph.start_nodes.length === 0) {
+      window.alert("Starting nodes have not been allocated. Select one or more starting nodes before validating or playtesting the dialogue.");
+    }
   } catch (error) {
     if (submittedGeneration !== generation) return;
     emptyGraph("The graph could not be generated. Your Markdown is still available.");
@@ -187,11 +196,8 @@ async function parse() {
 
 async function save() {
   if (saveButton.disabled) return;
-  if (pendingMarkdown !== null) {
-    saveStatus.textContent = "Press Parse to synchronize GUI edits before saving the draft.";
-    return;
-  }
-  const submittedSource = source.value;
+  const hadPendingGraphEdits = pendingMarkdown !== null;
+  const submittedSource = pendingMarkdown ?? source.value;
   saveButton.disabled = true;
   saveStatus.dataset.error = "false";
   saveStatus.textContent = "Saving…";
@@ -202,13 +208,14 @@ async function save() {
     }
     revision = reply.revision;
     savedSource = submittedSource;
-    if (pendingMarkdown !== null) {
+    if (hadPendingGraphEdits) {
       source.value = submittedSource;
       pendingMarkdown = null;
       updateLines();
-      // Save does not validate; the graph is still marked as unsynced.
+      graphSource = submittedSource;
     }
     saveStatus.textContent = source.value === savedSource ? "Draft saved" : "New edits not yet saved";
+    if (hadPendingGraphEdits) void parse();
   } catch (error) {
     saveStatus.dataset.error = "true";
     saveStatus.textContent = error instanceof Error ? error.message : "Draft was not saved.";
@@ -307,7 +314,7 @@ editForm.addEventListener("submit", event => {
 // Graph editing toolbar. All operations use the same pending Markdown buffer.
 const toolbar = document.createElement("div");
 toolbar.className = "graph-edit-toolbar";
-toolbar.innerHTML = `<button type="button" id="new-graph-node">+ New node</button><label>From <input id="connection-from" list="graph-node-options" aria-label="Connection source node" placeholder="Search nodes" autocomplete="off"></label><label>To <input id="connection-to" list="graph-node-options" aria-label="Connection target node" placeholder="Search nodes" autocomplete="off"></label><datalist id="graph-node-options"></datalist><label>Type <select id="connection-kind"><option value="choice">Player choice</option><option value="jump">Automatic jump</option></select></label><button type="button" id="add-graph-connection">+ Connect nodes</button><label>Connections <select id="connection-delete" aria-label="Select connection to delete"></select></label><button type="button" id="delete-graph-connection">Delete connection</button><label>Layout <select id="graph-layout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><label><input type="checkbox" id="rotate-edge-labels"> Rotate connector text 90°</label><span class="toolbar-note">Drag from a node's output handle to another node's input to connect.</span>`;
+toolbar.innerHTML = `<button type="button" id="new-graph-node">+ New node</button><details class="starting-node-picker"><summary id="starting-node-summary">Starting nodes (none)</summary><fieldset id="starting-node-list"><legend>Select conversation entry nodes</legend></fieldset></details><label>From <input id="connection-from" list="graph-node-options" aria-label="Connection source node" placeholder="Search nodes" autocomplete="off"></label><label>To <input id="connection-to" list="graph-node-options" aria-label="Connection target node" placeholder="Search nodes" autocomplete="off"></label><datalist id="graph-node-options"></datalist><label>Type <select id="connection-kind"><option value="choice">Player choice</option><option value="jump">Automatic jump</option></select></label><button type="button" id="add-graph-connection">+ Connect nodes</button><label>Connections <select id="connection-delete" aria-label="Select connection to delete"></select></label><button type="button" id="delete-graph-connection">Delete connection</button><label>Layout <select id="graph-layout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><label><input type="checkbox" id="rotate-edge-labels"> Rotate connector text 90°</label><span class="toolbar-note">Drag from a node's output handle to another node's input to connect.</span>`;
 function refreshConnectionOptions() {
   const from = toolbar.querySelector<HTMLInputElement>("#connection-from")!;
   const to = toolbar.querySelector<HTMLInputElement>("#connection-to")!;
@@ -316,6 +323,19 @@ function refreshConnectionOptions() {
   datalist.replaceChildren(...ids.map(id => {
     const option = document.createElement("option"); option.value = id; return option;
   }));
+  const startList = toolbar.querySelector<HTMLFieldSetElement>("#starting-node-list")!;
+  const startNodes = new Set(editingGraph?.start_nodes ?? []);
+  startList.replaceChildren(...ids.map(id => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = id;
+    checkbox.checked = startNodes.has(id);
+    label.append(checkbox, document.createTextNode(id));
+    return label;
+  }));
+  toolbar.querySelector<HTMLElement>("#starting-node-summary")!.textContent =
+    `Starting nodes (${startNodes.size || "none"})`;
   if (!ids.includes(from.value)) from.value = ids[0] ?? "";
   if (!ids.includes(to.value)) to.value = ids.find(id => id !== from.value) ?? ids[0] ?? "";
   const del = toolbar.querySelector<HTMLSelectElement>("#connection-delete")!;
@@ -353,6 +373,18 @@ toolbar.querySelector<HTMLButtonElement>("#add-graph-connection")!.addEventListe
   catch (error) { window.alert(error instanceof Error ? error.message : "Cannot connect nodes"); }
 });
 toolbar.querySelector<HTMLButtonElement>("#delete-graph-connection")!.addEventListener("click", deleteConnection);
+toolbar.querySelector<HTMLFieldSetElement>("#starting-node-list")!.addEventListener("change", event => {
+  if (!editingGraph || graphSource !== source.value) return;
+  const starts = [...toolbar.querySelectorAll<HTMLInputElement>("#starting-node-list input:checked")].map(input => input.value);
+  try {
+    pendingMarkdown = setStartNodes(pendingMarkdown ?? source.value, starts);
+    editingGraph = { ...editingGraph, start_nodes: starts };
+    graphChanged(starts.length ? `${starts.length} starting node${starts.length === 1 ? "" : "s"} selected` : "Starting nodes cleared");
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to update starting node.");
+    refreshConnectionOptions();
+  }
+});
 toolbar.querySelector<HTMLButtonElement>("#new-graph-node")!.addEventListener("click", () => {
   if (!editingGraph || graphSource !== source.value) { window.alert("Parse valid Markdown before adding a node."); return; }
   const id = window.prompt("New node ID (letters, numbers, underscores):", "New_Dialogue_Node");

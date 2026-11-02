@@ -41,5 +41,5 @@ def build_graph(ast):
                     "source_line": item["source_line"],
                 })
 
-    return {"snapshot_id": ast["snapshot_id"], "start": nodes[0]["id"] if nodes else None,
+    return {"snapshot_id": ast["snapshot_id"], "start_nodes": ast.get("start_nodes", []),
             "nodes": nodes, "edges": edges, "diagnostics": diagnostics}

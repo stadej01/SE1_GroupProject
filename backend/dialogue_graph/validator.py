@@ -24,4 +24,15 @@ def validate_graph_integrity(ast):
             if not choice["text"].strip():
                 diagnostics.append({"severity": "error", "line": choice["source_line"],
                     "node_id": node["id"], "message": "A choice must have nonblank text."})
+    start_nodes = ast.get("start_nodes", [])
+    if not start_nodes:
+        diagnostics.append({"severity": "warning",
+            "message": "Starting nodes have not been allocated. Select one or more starting nodes before validating or playtesting the dialogue."})
+    else:
+        start_lines = ast.get("start_lines", [])
+        for index, start in enumerate(start_nodes):
+            if start not in seen:
+                line = start_lines[index] if index < len(start_lines) else None
+                diagnostics.append({"severity": "error", "line": line,
+                    "node_id": start, "message": f"Starting node {start} does not exist in this document."})
     return diagnostics

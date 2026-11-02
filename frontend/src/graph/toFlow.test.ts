@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import type { DialogueGraph } from "./contract";
-import { NODE_H, NODE_W, findBackEdges, loopClearance, loopPath, toFlow } from "./toFlow";
+import { NODE_H, NODE_W, findBackEdges, layout, loopClearance, loopPath, nodeHeight, toFlow } from "./toFlow";
 
 // Same fixture the Python tests produce, so both sides are pinned to one contract.
 const graph: DialogueGraph = JSON.parse(
@@ -70,10 +70,40 @@ test("saved positions override auto-layout", () => {
   assert.deepEqual(placed.find((n) => n.id === "Node_Exit")!.position, { x: 5, y: 7 });
 });
 
+test("the designated starting node is marked in the graph", () => {
+  const { nodes: mapped } = toFlow(graph);
+  assert.deepEqual(mapped.filter((n) => n.data.is_start).map((n) => n.id), graph.start_nodes);
+});
+
+test("multiple conversation entry nodes are all marked", () => {
+  const { nodes: mapped } = toFlow({ ...graph, start_nodes: ["Node_Merchant_Greeting", "Node_Exit"] });
+  assert.deepEqual(mapped.filter((n) => n.data.is_start).map((n) => n.id), ["Node_Merchant_Greeting", "Node_Exit"]);
+});
+
 test("disconnected components and isolated nodes are all retained", () => {
   const isolated: DialogueGraph = { ...graph, edges: [] };
   assert.equal(toFlow(isolated).nodes.length, graph.nodes.length);
   assert.equal(findBackEdges(isolated).size, 0);
+});
+
+test("node height reserves space for long dialogue that wraps in the graph", () => {
+  const longLine = "Narrator: " + "A".repeat(80);
+  const longNode = { ...graph.nodes[0], dialogue_lines: [{ speaker: "Narrator", text: "A".repeat(80), source_line: 1 }] };
+  assert.ok(nodeHeight(longNode) > NODE_H);
+
+  const overlapGraph: DialogueGraph = {
+    ...graph,
+    nodes: [
+      longNode,
+      { ...longNode, id: "another", dialogue_lines: [{ speaker: "Narrator", text: longLine, source_line: 2 }] },
+    ],
+    edges: [],
+    start_nodes: [],
+  };
+  const boxes = layout(overlapGraph, new Set());
+  const first = boxes.get(longNode.id)!;
+  const second = boxes.get("another")!;
+  assert.ok(second.y >= first.y + first.height, "wrapped dialogue nodes must not overlap");
 });
 
 test("many loop lanes keep gutters outside a self-loop's node", () => {
@@ -85,7 +115,7 @@ test("many loop lanes keep gutters outside a self-loop's node", () => {
 });
 
 test("a 12,000-node conversation maps without recursion overflow", () => {
-  const large: DialogueGraph = { snapshot_id: "large", start: "0", diagnostics: [],
+  const large: DialogueGraph = { snapshot_id: "large", start_nodes: ["0"], diagnostics: [],
     nodes: Array.from({ length: 12_000 }, (_, i) => ({ id: String(i), category: null, color: null,
       preview: "", source_line: i + 1, source_end_line: i + 1 })),
     edges: Array.from({ length: 11_999 }, (_, i) => ({ id: `edge-${i}`, source: String(i), target: String(i + 1),

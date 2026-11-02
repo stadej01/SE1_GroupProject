@@ -21,7 +21,10 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
     >
       {/* One handle each side; loops are routed by LoopEdge, not by extra handles. */}
       <Handle type="target" position={vertical ? Position.Top : Position.Left} id="in" />
-      <div className="dlg-node__id" title={data.id}>{data.id}</div>
+      <div className="dlg-node__heading">
+        <div className="dlg-node__id" title={data.id}>{data.id}</div>
+        {data.is_start && <span className="dlg-node__start">START</span>}
+      </div>
       <div className="dlg-node__preview">
         {data.dialogue_lines?.length ? data.dialogue_lines.map((line, index) => (
           <div className="dlg-node__line" key={`${line.source_line}-${index}`}>

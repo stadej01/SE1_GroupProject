@@ -5,7 +5,9 @@
   display: flex; flex-direction: column; gap: 6px; overflow: visible;
 }
 .dlg-node__id { font-weight: 600; font-size: 13px; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dlg-node__preview { font-size: 12px; line-height: 1.4; color: #4b5563;
+.dlg-node__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dlg-node__start { flex: none; color: #176345; background: #e2f4e9; border-radius: 4px; padding: 2px 5px; font-size: 9px; font-weight: 700; letter-spacing: .5px; }
+.dlg-node__preview { font-size: 12px; line-height: 19px; color: #4b5563;
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .dlg-node__line + .dlg-node__line { margin-top: 5px; }
 .dlg-node__missing { font-size: 12px; color: #b23a48; }

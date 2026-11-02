@@ -18,6 +18,7 @@ class MerchantFixture(unittest.TestCase):
 
     def test_parses_cleanly(self):
         self.assertEqual(self.graph["diagnostics"], [])
+        self.assertEqual(self.graph["start_nodes"], ["Node_Merchant_Greeting"])
 
     def test_greeting_has_jump_and_choice_edges(self):  # US-29 AC1 input
         out = [e for e in self.graph["edges"] if e["source"] == "Node_Merchant_Greeting"]
@@ -52,6 +53,30 @@ class MerchantFixture(unittest.TestCase):
 
 
 class EdgeCases(unittest.TestCase):
+    def test_missing_start_is_a_warning_not_a_graph_error(self):
+        graph = graph_for("# A\nNarrator: Hello.\n")
+        self.assertEqual(graph["start_nodes"], [])
+        self.assertEqual(graph["diagnostics"][0]["severity"], "warning")
+        self.assertIn("Starting nodes have not been allocated", graph["diagnostics"][0]["message"])
+
+    def test_missing_and_duplicate_start_directives_block_graph(self):
+        for source in [
+            "<!-- start: Missing -->\n# A\n",
+            "<!-- start: A -->\n<!-- start: A -->\n# A\n",
+        ]:
+            with self.subTest(source=source), self.assertRaises(GraphValidationError):
+                graph_for(source)
+
+    def test_multiple_start_nodes_are_allowed(self):
+        graph = graph_for("<!-- start: A -->\n<!-- start: B -->\n# A\nNarrator: First.\n# B\nNarrator: Second.\n")
+        self.assertEqual(graph["start_nodes"], ["A", "B"])
+        self.assertFalse(graph["diagnostics"])
+
+    def test_start_directive_must_precede_nodes(self):
+        with self.assertRaises(GraphValidationError) as caught:
+            graph_for("# A\n<!-- start: A -->\n")
+        self.assertIn("must appear before the first node", caught.exception.diagnostics[0]["message"])
+
     def test_missing_target_blocks_graph(self):
         with self.assertRaises(GraphValidationError) as caught:
             graph_for('# A\n* "Go" -> Nowhere\n')

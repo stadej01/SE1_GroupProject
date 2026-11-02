@@ -7,14 +7,14 @@ import type { DialogueGraph, GraphEdge, GraphNode } from "./contract";
 export const NODE_W = 240;
 export const NODE_H = 96;
 
-/** Reserve enough space for every dialogue line, including wrapped text. */
+/** Reserve enough space for dialogue wrapping before React Flow measures nodes. */
 export function nodeHeight(n: GraphNode): number {
   const lines = n.dialogue_lines?.length
     ? n.dialogue_lines.map((line) => `${line.speaker}: ${line.text}`)
     : [n.preview || "No dialogue lines"];
   const wrappedLines = lines.reduce((total, line) =>
-    total + Math.max(1, ...line.split("\n").map((part) => Math.ceil(part.length / 34))), 0);
-  return Math.max(NODE_H, 54 + wrappedLines * 19 + Math.max(0, lines.length - 1) * 5);
+    total + Math.max(1, ...line.split("\n").map((part) => Math.ceil(part.length / 16))), 0);
+  return Math.max(NODE_H, 64 + wrappedLines * 19 + Math.max(0, lines.length - 1) * 5);
 }
 const GAP_X = 120;
 const GAP_Y = 48;
@@ -61,7 +61,7 @@ export function findBackEdges(graph: DialogueGraph): Set<string> {
 
   const back = new Set<string>();
   const state = new Map<string, "active" | "done">();
-  const roots = [graph.start, ...graph.nodes.map((n) => n.id)].filter(Boolean) as string[];
+  const roots = [...graph.start_nodes, ...graph.nodes.map((n) => n.id)];
   // Explicit stack avoids a JavaScript recursion overflow on long conversations.
   for (const id of roots) {
     if (state.has(id)) continue;
@@ -175,7 +175,7 @@ export function toFlow(graph: DialogueGraph, saved: Map<string, { x: number; y: 
     type: "dialogue",
     // Saved NodePosition wins; auto-layout only fills gaps (design doc 3.2.3).
     position: saved.get(n.id) ?? (vertical ? { x: auto.get(n.id)!.y * 1.6, y: auto.get(n.id)!.x } : { x: auto.get(n.id)!.x, y: auto.get(n.id)!.y }),
-    data: n,
+    data: { ...n, is_start: graph.start_nodes.includes(n.id) },
     style: { width: NODE_W, height: nodeHeight(n) },
   }));
 
