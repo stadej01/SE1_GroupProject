@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dialogue editor</title>
+  {% for stylesheet in assets.styles %}<link rel="stylesheet" href="{{ stylesheet }}">{% endfor %}
+</head>
+<body>
+  <main id="editor" data-sync-url="{% url 'editor:sync' %}" data-save-url="{% url 'editor:save' %}" data-revision="{{ revision }}">
+    <header class="app-header">
+      <div class="app-identity"><span class="app-mark" aria-hidden="true">↳</span><div><p class="eyebrow">STORY WORKSPACE</p><h1>Dialogue editor</h1></div></div>
+      <div class="actions"><span id="save-status" class="save-status" role="status">Draft loaded</span><button id="save-button" type="button" disabled>Save draft</button><button id="parse-button" class="primary" type="button" disabled>Parse Markdown <span aria-hidden="true">↗</span></button></div>
+    </header>
+    <div class="workspace">
+      <section class="source-panel panel" aria-labelledby="source-heading">
+        <header class="panel-header"><div><p class="eyebrow">01 / SOURCE</p><h2 id="source-heading"><label for="markdown-source">Markdown</label></h2></div><span id="line-count" class="badge"></span></header>
+        <div class="source-editor"><pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre><textarea id="markdown-source" aria-describedby="source-help" spellcheck="false" wrap="off">{{ markdown_source }}</textarea></div>
+        <footer class="source-footer"><span id="source-selection">Select a node to find its source.</span><span id="source-help">Ctrl / ⌘ + Enter to parse</span></footer>
+      </section>
+      <section class="graph-panel panel" aria-labelledby="graph-heading">
+        <header class="panel-header"><div><p class="eyebrow">02 / STRUCTURE</p><h2 id="graph-heading">Dialogue graph</h2></div><span id="graph-count" class="badge">Not parsed</span></header>
+        <div id="graph-root" class="graph-root"><div class="empty-state"><span class="empty-glyph" aria-hidden="true">↳</span><h3>Your story, connected.</h3><p>Parse the Markdown to see dialogue nodes, choices, and jumps.</p></div></div>
+        <footer class="graph-footer"><span id="parse-status" role="status">Ready to parse</span><span>Drag to arrange · Scroll to zoom</span></footer>
+      </section>
+    </div>
+    <section id="diagnostics-panel" class="diagnostics" aria-labelledby="diagnostics-heading" hidden><h2 id="diagnostics-heading">Markdown needs attention</h2><p>You can still save this draft. Fix these issues before generating the graph.</p><ul id="diagnostics"></ul></section>
+    <div hidden>{% csrf_token %}</div>
+  </main>
+  <noscript><p>This editor needs JavaScript to parse, save, and display the graph.</p></noscript>
+  {% if assets %}<script type="module" src="{{ assets.script }}"></script>{% else %}<p>Frontend assets are missing. Run <code>npm ci &amp;&amp; npm run build</code> in <code>frontend/</code>, then reload.</p>{% endif %}
+</body>
+</html>
