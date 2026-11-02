@@ -83,7 +83,7 @@ Stop the development server with Ctrl+C.
 ## Test
 
 ```bash
-python backend/manage.py test accounts config
+python backend/manage.py test accounts config teams
 ```
 
 The tests cover email authentication, user creation, unique emails, superuser
@@ -91,3 +91,5 @@ creation, admin user creation and retrieval, and the health endpoint.
 
 Django creates a separate test database. Use a development database role with
 permission to create the test database.
+
+The `teams` tests cover membership checks (a member, a non-member, and an anonymous user) and the rule that a user can belong to a team only once.
