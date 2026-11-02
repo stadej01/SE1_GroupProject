@@ -86,8 +86,10 @@ Stop the development server with Ctrl+C.
 python backend/manage.py test accounts config teams
 ```
 
-The tests cover email authentication, user creation, unique emails, superuser
-creation, admin user creation and retrieval, and the health endpoint.
+The tests cover email authentication, user creation, unique emails regardless of
+capitalization, required display names, superuser creation, admin user creation
+and retrieval, and the health endpoint, which rejects methods other than GET and
+HEAD with `405`.
 
 Django creates a separate test database. Use a development database role with
 permission to create the test database.
