@@ -42,11 +42,22 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'rest_framework',
     'accounts.apps.AccountsConfig',
     'teams.apps.TeamsConfig',
+    'projects.apps.ProjectsConfig',
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'accounts.authentication.SessionLoginAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -84,6 +95,15 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': env.db('DATABASE_URL'),
 }
+
+
+# Markdown storage
+# Each project's Markdown is a file in a private GitHub repository (owner/name).
+# Without a repository, saved Markdown stays in server memory.
+
+GITHUB_REPOSITORY = env('GITHUB_REPOSITORY', default='')
+GITHUB_TOKEN = env('GITHUB_TOKEN', default='')
+GITHUB_BRANCH = env('GITHUB_BRANCH', default='main')
 
 
 # Password validation

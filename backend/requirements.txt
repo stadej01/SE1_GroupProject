@@ -3,8 +3,12 @@
 asgiref==3.13.0
     # via django
 django==5.2.18
-    # via -r backend/requirements.in
+    # via
+    #   -r backend/requirements.in
+    #   djangorestframework
 django-environ==0.14.0
+    # via -r backend/requirements.in
+djangorestframework==3.18.3
     # via -r backend/requirements.in
 psycopg==3.3.6
     # via -r backend/requirements.in
