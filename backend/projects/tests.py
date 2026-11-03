@@ -380,6 +380,26 @@ class SaveProjectTests(ProjectAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(Project.objects.get(pk=project_id).revision, 1)
 
+    def test_unauthenticated_request_returns_401(self):
+        project_id = self.create_project()
+        self.client.force_authenticate(user=None)
+
+        response = self.save_project(project_id, self.MARKDOWN, self.NODES)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        project = Project.objects.get(pk=project_id)
+        self.assertEqual(project.revision, 1)
+        self.assertEqual(project.head_commit_sha, "")
+        self.assertFalse(project.positions.exists())
+
+    def test_unknown_project_returns_404(self):
+        response = self.save_project(
+            "00000000-0000-0000-0000-000000000000", self.MARKDOWN, self.NODES
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertFalse(Project.objects.exists())
+
     def test_failed_markdown_read_aborts_save_without_writing(self):
         moved = [{"id": "Node_2", "position": {"x": 500, "y": 80}}]
 
@@ -393,6 +413,7 @@ class SaveProjectTests(ProjectAPITestCase):
                         self.store, "read", side_effect=ContentStoreError("Read failed.")
                     ),
                     mock.patch.object(self.store, "write", wraps=self.store.write) as write,
+                    self.assertLogs("projects.views", "WARNING"),
                 ):
                     response = self.save_project(
                         project_id, markdown, moved, base_revision=2
@@ -464,23 +485,31 @@ class GitHubSaveTests(ProjectAPITestCase):
             "projects.storage.urlopen", side_effect=URLError("Network is unreachable")
         )
 
+    def assert_logged_with_the_cause(self, logs, action):
+        [record] = logs.records
+        self.assertIn(action, record.getMessage())
+        self.assertIs(record.exc_info[0], ContentStoreError)
+        self.assertIn("Network is unreachable", str(record.exc_info[1]))
+
     def test_github_outage_returns_503_and_changes_nothing(self):
         project_id = self.create_project()
 
-        with self.github_outage():
+        with self.github_outage(), self.assertLogs("projects.views", "WARNING") as logs:
             failed_save = self.save_project(project_id, self.MARKDOWN, self.NODES)
 
         self.assertEqual(failed_save.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assert_logged_with_the_cause(logs, f"save project {project_id}")
         project = Project.objects.get(pk=project_id)
         self.assertEqual(project.revision, 1)
         self.assertEqual(project.head_commit_sha, "")
         self.assertFalse(project.positions.exists())
 
         self.save_project(project_id, self.MARKDOWN, self.NODES)
-        with self.github_outage():
+        with self.github_outage(), self.assertLogs("projects.views", "WARNING") as logs:
             failed_open = self.open_project(project_id)
 
         self.assertEqual(failed_open.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assert_logged_with_the_cause(logs, f"open project {project_id}")
         reopened = self.open_project(project_id).json()
         self.assertEqual(reopened["markdown_source"], self.MARKDOWN)
         self.assertEqual(reopened["revision"], 2)

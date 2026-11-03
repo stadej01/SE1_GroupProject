@@ -1,3 +1,5 @@
+import logging
+
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
@@ -10,6 +12,8 @@ from .models import Project
 from .serializers import ProjectCreateSerializer, ProjectSaveSerializer
 from .services import StaleRevision, read_markdown, read_project_snapshot, save_project
 from .storage import ContentStoreError, get_content_store
+
+logger = logging.getLogger(__name__)
 
 CONTENT_UNAVAILABLE = {"detail": "Project content is unavailable. Try again later."}
 
@@ -62,6 +66,11 @@ class ProjectDetailView(APIView):
         try:
             markdown = read_markdown(project, get_content_store())
         except ContentStoreError:
+            logger.warning(
+                "Could not read Markdown to open project %s.",
+                project.pk,
+                exc_info=True,
+            )
             return Response(
                 CONTENT_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
@@ -104,6 +113,11 @@ class ProjectSaveView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
         except ContentStoreError:
+            logger.warning(
+                "Could not store Markdown to save project %s.",
+                project.pk,
+                exc_info=True,
+            )
             return Response(
                 CONTENT_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
