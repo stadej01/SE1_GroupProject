@@ -22,6 +22,8 @@ export interface GraphEdge {
   label: string | null;
   condition: string | null;
   source_line: number;
+  /** True for a jump with nothing after it in its node. Always false for choices. */
+  ends_node: boolean;
 }
 
 export interface Diagnostic {

@@ -7,13 +7,11 @@ import { toFlow } from "../graph/toFlow";
 import { DialogueNode } from "./DialogueNode";
 import { LoopEdge } from "./LoopEdge";
 
-// Defined outside the component so React Flow doesn't warn about new objects each render.
 const nodeTypes = { dialogue: DialogueNode };
 const edgeTypes = { loop: LoopEdge };
 
 interface Props {
   graph: Graph;
-  /** NodePosition rows from GET /projects/{id}; omit to use auto-layout only. */
   savedPositions?: Map<string, { x: number; y: number }>;
   onSelectNode: (node: GraphNode) => void;
   onEditNode?: (node: GraphNode) => void;
@@ -25,7 +23,6 @@ interface Props {
 }
 
 export function DialogueGraph({ graph, savedPositions, onSelectNode, onMoveNode, onEditNode, vertical = false, rotateLabels = false, onConnectNodes, onSelectEdge }: Props) {
-  // Re-derives only when a sync returns a new graph.
   const { nodes, edges } = useMemo(() => toFlow(graph, savedPositions, vertical, rotateLabels), [graph, savedPositions]);
 
   const [liveNodes, setLiveNodes] = useState<Node[]>(nodes as Node[]);
@@ -58,7 +55,6 @@ export function DialogueGraph({ graph, savedPositions, onSelectNode, onMoveNode,
         deleteKeyCode={null}
         fitView
         minZoom={0.1}
-        // Text and source spans also change identity, even if every edge ID stays the same.
         key={`${graph.snapshot_id}-${vertical}-${rotateLabels}`}
       >
         <Background gap={24} />
@@ -68,8 +64,10 @@ export function DialogueGraph({ graph, savedPositions, onSelectNode, onMoveNode,
       <div className="dlg-legend" aria-label="Edge legend">
         <svg width="36" height="8" aria-hidden><line x1="0" y1="4" x2="36" y2="4" stroke="#3d5a80" strokeWidth="2" /></svg>
         <span>Player choice</span>
+        <svg width="36" height="8" aria-hidden><line x1="0" y1="4" x2="36" y2="4" stroke="#8a5a00" strokeWidth="2" /></svg>
+        <span>Jump (ends the node)</span>
         <svg width="36" height="8" aria-hidden><line x1="0" y1="4" x2="36" y2="4" stroke="#8a5a00" strokeWidth="2" strokeDasharray="2 5" strokeLinecap="round" /></svg>
-        <span>Automatic jump</span>
+        <span>Jump (mid-dialogue)</span>
       </div>
       {graph.diagnostics.length > 0 && (
         <ul className="dlg-diagnostics">

@@ -336,7 +336,8 @@ function createConnection(from: string, to: string, kind: "choice" | "jump", lab
   pendingMarkdown = appendConnection(pendingMarkdown ?? source.value, from, to, kind, label);
   editingGraph = { ...editingGraph, edges: [...editingGraph.edges, {
     id: `gui_${Date.now()}_${editingGraph.edges.length}`, source: from, target: to,
-    kind, label: kind === "choice" ? label : null, condition: null, source_line: 0
+    kind, label: kind === "choice" ? label : null, condition: null, source_line: 0,
+    ends_node: kind === "jump"
   }] };
   graphChanged("Connection added");
 }

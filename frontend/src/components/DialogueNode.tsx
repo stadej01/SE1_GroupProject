@@ -16,12 +16,13 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
       style={{
         borderColor: selected ? "#f5b800" : undefined,
         boxShadow: selected ? "0 0 0 3px #f5c542, 0 0 0 5px rgba(245,197,66,.28)" : undefined,
-        borderLeft: `6px solid ${accent}`,
       }}
     >
       {/* One handle each side; loops are routed by LoopEdge, not by extra handles. */}
       <Handle type="target" position={vertical ? Position.Top : Position.Left} id="in" />
-      <div className="dlg-node__id" title={data.id}>{data.id}</div>
+      {/* The node's color fills the title bar. */}
+      <div className="dlg-node__id" style={{ background: accent }} title={data.id}>{data.id}</div>
+      <div className="dlg-node__body">
       <div className="dlg-node__preview">
         {data.dialogue_lines?.length ? data.dialogue_lines.map((line, index) => (
           <div className="dlg-node__line" key={`${line.source_line}-${index}`}>
@@ -30,6 +31,7 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
         )) : (data.preview || "No dialogue lines")}
       </div>
       {data.category && <div className="dlg-node__category">{data.category}</div>}
+      </div>
       <Handle type="source" position={vertical ? Position.Bottom : Position.Right} id="out" />
     </div>
   );
