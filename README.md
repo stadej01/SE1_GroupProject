@@ -7,6 +7,10 @@ This repository currently has two Django demos. They share a codebase but **do n
 
 The Markdown parser, graph conversion, and React frontend do not read or write to Neon. The accounts demo does not install the `editor` app.
 
+## Git status of this ZIP
+
+This **rebased checkout** includes a `.git/` directory and the completed local merge resolution on `js_US-01_mkd2GUI`. Extract it into a new folder rather than copying it over an existing checkout. No commits have been pushed to GitHub. See `MERGE_NOTES.md` before deciding how to sync this branch with the team.
+
 ## Requirements
 
 - Python **3.12** (team's pinned dependencies target this version)
