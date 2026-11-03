@@ -1,10 +1,12 @@
-# Team dependencies retained; compatible with both isolated Django demos.
-# Maintained using backend/requirements.in (Python 3.12 recommended).
+
+# Dependencies for the dialogue editor and accounts/teams demo.
+# Python 3.12 recommended.
 asgiref==3.13.0
-django==5.2.18
+django>=5.2,<5.3
 django-environ==0.14.0
 psycopg==3.3.6
 psycopg-binary==3.3.6 ; implementation_name != 'pypy'
 sqlparse==0.6.0
 typing-extensions==4.16.0 ; python_full_version < '3.13'
 tzdata==2026.5 ; sys_platform == 'win32'
+

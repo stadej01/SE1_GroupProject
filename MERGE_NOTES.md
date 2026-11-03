@@ -1,17 +1,8 @@
-# Merge notes — editor and accounts demos
+# Merge notes — independent editor and Neon demos
 
-This folder is a complete local Git checkout with the rebase resolved. It contains the `.git/` directory, unlike the earlier source-only ZIP. The original uploaded repository was copied before the rebase was continued; the original upload and remote GitHub repository were not modified.
+This package is a **clean source snapshot**, not a completed Git rebase. The uploaded repository had an active rebase and conflict markers. This ZIP intentionally excludes `.git/`, `.venv/`, `node_modules/`, and local SQLite data. It does **not** touch the remote repository or the shared Neon database.
 
-## Git resolution
-
-- Branch: `js_US-01_mkd2GUI`
-- Rebasing onto: `a265b86` (team accounts/teams baseline)
-- All four queued commits have been processed and the rebase completed.
-- Conflict markers and unmerged Git index entries were resolved; the working tree was clean after the rebase.
-- Git history was rewritten locally by the rebase. **Do not force-push or replace the team's branch without coordinating with the team.**
-- We deliberately removed generated dependencies (`node_modules/`, `__pycache__/`, `.venv/`) and the local SQLite database from the rebased commit instead of committing them.
-
-## Files that required conflict resolution
+## Conflicts found in the uploaded ZIP
 
 - `README.md`
 - `backend/requirements.txt`
@@ -20,33 +11,21 @@ This folder is a complete local Git checkout with the rebase resolved. It contai
 - `backend/config/urls.py`
 - `backend/config/asgi.py`
 - `backend/config/wsgi.py`
-- `.gitignore` (during the second commit)
-- `backend/tests/test_graph.py` (during the fourth commit)
 
-## Configuration decisions
+## Resolution
 
-- `config.settings` is the default for the dialogue editor: React Flow, Markdown parser, session-based local SQLite drafts. It does not load Neon credentials.
-- `config.settings_neon` is for the accounts/teams demo with the custom user model, Django admin, and Neon PostgreSQL.
-- `config.urls` and `config.urls_neon` keep the two demos' routes separate.
-- `config.settings_auth_test` runs accounts/teams tests against temporary SQLite, without contacting Neon.
-- `backend/requirements.txt` combines the dependencies needed for both demos.
+- `config.settings`: editor only, local SQLite, session-based drafts, default `manage.py` settings.
+- `config.settings_neon`: accounts/teams only, Neon Postgres, custom `AUTH_USER_MODEL`.
+- `config.urls` and `config.urls_neon`: distinct URL maps for each demo.
+- `config.settings_auth_test`: safely tests accounts/teams using temporary SQLite.
+- `manage.py`, `asgi.py`, and `wsgi.py`: use `DJANGO_SETTINGS_MODULE` if explicitly supplied; otherwise default to the local editor.
+- `requirements.txt`: retains the team's pinned Django, `django-environ`, and `psycopg` dependencies, which also support the editor.
+- The original applications, migrations, parser, React components, and test files have not been rewritten for integration.
 
-## Validation
+## Applying the work to the team's active Git rebase
 
-After completing the rebase, Django checks and tests passed:
+**Do not overwrite the `.git/` folder.** In the original checkout, run `git status` and make a backup branch or copy first. Copy the resolved source files from this package over the corresponding files in the checkout. Stage only the files you reviewed. Use `git diff --check` and your tests before proceeding with `git rebase --continue`.
 
-- Editor tests: 13
-- Parser/graph tests: 19
-- Accounts/teams/config tests: 10, using isolated SQLite
-- TypeScript typecheck: passed using cached dependencies
+The ZIP stopped during the first of four commits; further rebase conflicts can occur. If Git reports a new conflict, inspect it before continuing. This archive does not represent a finished rebase or a push to the team's repository.
 
-The frontend browser tests and the live Neon connection were not verified. The frontend unit-test runner was blocked by an incomplete Linux dependency cache; local `npm install` should provide the appropriate dependencies on macOS or Windows.
-
-## Safely using this checkout
-
-1. Extract this ZIP into a **new directory**. Avoid overwriting an existing `.git/` folder or an active team checkout.
-2. From that directory, run `git status` and `git log --oneline -5` to verify the completed local rebase.
-3. Follow `README.md` to set up the app's Python and Node dependencies. For the Neon demo, provide the team's `.env` values separately; no `.env` credentials are included.
-4. Have your teammates review the rebase before pushing. Because the branch was rebased, ordinary pushes may be rejected; don't force-push without explicit agreement.
-
-The remote GitHub repository and the shared Neon database have not been changed.
+Neon safety: the default Django configuration and parser never load the Neon credentials. Do not run migrations or create users against the shared Neon database without the team's approval.

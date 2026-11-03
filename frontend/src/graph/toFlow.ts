@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /**
  * Converts the dialogue graph contract into the nodes and edges that React Flow draws.
  *
@@ -15,13 +16,22 @@
  *    and under every node in their span, so they never cover the nodes in
  *    between (see loopClearance, loopPath).
  */
+=======
+// Pure functions: dialogue graph contract -> React Flow nodes/edges.
+// No React or @xyflow imports, so everything here runs under `node --test`.
+// The object shapes are structurally compatible with @xyflow/react's Node and Edge.
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
 
 import type { DialogueGraph, GraphEdge, GraphNode } from "./contract";
 
 export const NODE_W = 240;
 export const NODE_H = 96;
 
+<<<<<<< HEAD
 // Reserve enough space for every dialogue line, including wrapped text.
+=======
+/** Reserve enough space for every dialogue line, including wrapped text. */
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
 export function nodeHeight(n: GraphNode): number {
   const lines = n.dialogue_lines?.length
     ? n.dialogue_lines.map((line) => `${line.speaker}: ${line.text}`)
@@ -32,6 +42,7 @@ export function nodeHeight(n: GraphNode): number {
 }
 const GAP_X = 120;
 const GAP_Y = 48;
+<<<<<<< HEAD
 export const LOOP_MARGIN = 28; 
 const LANE_STEP = 16;          
 
@@ -51,6 +62,17 @@ export function edgeStyle(edge: GraphEdge, outgoingCount: number) {
   return edge.ends_node || outgoingCount === 1 ? EDGE_STYLE.jump : EDGE_STYLE.midJump;
 }
 
+=======
+export const LOOP_MARGIN = 28; // clearance below the lowest node a loop passes under
+const LANE_STEP = 16;          // extra drop per stacked loop so loops don't overlap
+
+// AC1: choices solid, jumps dotted.
+export const EDGE_STYLE = {
+  choice: { stroke: "#3d5a80", strokeWidth: 1.75 },
+  jump: { stroke: "#8a5a00", strokeWidth: 1.75, strokeDasharray: "2 5", strokeLinecap: "round" },
+} as const;
+
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
 export interface Box { x: number; y: number; width: number; height: number }
 
 export interface FlowNode {
@@ -75,7 +97,11 @@ export interface FlowEdge {
   data: { kind: GraphEdge["kind"]; condition: string | null; backEdge: boolean; lane: number; rotateLabels: boolean };
 }
 
+<<<<<<< HEAD
 // Edges that point back to a node already on the DFS path from the start (includes self-loops).
+=======
+/** Edges that point back to a node already on the DFS path from the start (includes self-loops). */
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
 export function findBackEdges(graph: DialogueGraph): Set<string> {
   const out = new Map<string, GraphEdge[]>();
   for (const e of graph.edges) {
@@ -113,6 +139,7 @@ export function findBackEdges(graph: DialogueGraph): Set<string> {
 
 /** Left-to-right layered layout: rank = longest forward path from a root. */
 export function layout(graph: DialogueGraph, back: Set<string>): Map<string, Box> {
+<<<<<<< HEAD
   const forward = graph.edges.filter((edge) => !back.has(edge.id));
   const outgoing = new Map<string, GraphEdge[]>();
   const indegree = new Map(graph.nodes.map((n) => [n.id, 0]));
@@ -130,17 +157,45 @@ export function layout(graph: DialogueGraph, back: Set<string>): Map<string, Box
       rank.set(edge.target, Math.max(rank.get(edge.target)!, rank.get(id)! + 1));
       indegree.set(edge.target, indegree.get(edge.target)! - 1);
       if (indegree.get(edge.target) === 0) queue.push(edge.target);
+=======
+  const forward = graph.edges.filter((e) => !back.has(e.id));
+  const outgoing = new Map<string, GraphEdge[]>();
+  const indegree = new Map(graph.nodes.map((n) => [n.id, 0]));
+  for (const e of forward) {
+    indegree.set(e.target, (indegree.get(e.target) ?? 0) + 1);
+    if (!outgoing.has(e.source)) outgoing.set(e.source, []);
+    outgoing.get(e.source)!.push(e);
+  }
+
+  const rank = new Map(graph.nodes.map((n) => [n.id, 0]));
+  const queue = graph.nodes.filter((n) => indegree.get(n.id) === 0).map((n) => n.id);
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const id = queue[cursor];
+    for (const e of outgoing.get(id) ?? []) {
+      rank.set(e.target, Math.max(rank.get(e.target)!, rank.get(id)! + 1));
+      indegree.set(e.target, indegree.get(e.target)! - 1);
+      if (indegree.get(e.target) === 0) queue.push(e.target);
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
     }
   }
 
   const nextYInRank = new Map<number, number>();
   const boxes = new Map<string, Box>();
+<<<<<<< HEAD
   for (const node of graph.nodes) {
     const r = rank.get(node.id)!;
     const y = nextYInRank.get(r) ?? 0;
     const height = nodeHeight(node);
     nextYInRank.set(r, y + height + GAP_Y);
     boxes.set(node.id, { x: r * (NODE_W + GAP_X), y, width: NODE_W, height });
+=======
+  for (const n of graph.nodes) {
+    const r = rank.get(n.id)!;
+    const y = nextYInRank.get(r) ?? 0;
+    const height = nodeHeight(n);
+    nextYInRank.set(r, y + height + GAP_Y);
+    boxes.set(n.id, { x: r * (NODE_W + GAP_X), y, width: NODE_W, height });
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
   }
   return boxes;
 }
@@ -159,11 +214,22 @@ export const LOOP_GUTTER = GAP_X / 2 - 12; // how far into the column gap a loop
 const RADIUS = 14;
 
 /**
+<<<<<<< HEAD
  * When creating loop: It leaves the source's right side, drops down the empty gap 
  * between columns, runs under every node in the span, and rises up the gap left of the target
  * into its left side.
  */
 export function loopPath(sx: number, sy: number, tx: number, ty: number, clearY: number, lane = 0) {
+=======
+ * AC2: route a loop around the nodes instead of through them. It leaves the
+ * source's right side, drops down the empty gap between columns, runs under
+ * every node in the span (at clearY), and rises up the gap left of the target
+ * into its left side. Corners are rounded so the edge reads as one curve.
+ * `points` are the corners, used by tests to prove nothing is crossed.
+ */
+export function loopPath(sx: number, sy: number, tx: number, ty: number, clearY: number, lane = 0) {
+  // Extra loops get vertical lanes; never shift a side gutter inside a node.
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
   const gutter = Math.max(RADIUS + 4, LOOP_GUTTER - lane * 12);
   const xr = sx + gutter;
   const xl = tx - gutter;
@@ -180,10 +246,17 @@ export function loopPath(sx: number, sy: number, tx: number, ty: number, clearY:
   return { path, points, labelX: (xr + xl) / 2, labelY: clearY };
 }
 
+<<<<<<< HEAD
 function edgeLabel(edge: GraphEdge): string | undefined {
   const cond = edge.condition ? `[if ${edge.condition}]` : "";
   if (edge.kind === "jump") return cond ? `${cond} jump` : "jump";
   const text = edge.label && edge.label.length > 28 ? `${edge.label.slice(0, 27)}…` : edge.label ?? "";
+=======
+function edgeLabel(e: GraphEdge): string | undefined {
+  const cond = e.condition ? `[if ${e.condition}]` : "";
+  if (e.kind === "jump") return cond ? `${cond} jump` : "jump";
+  const text = e.label && e.label.length > 28 ? `${e.label.slice(0, 27)}…` : e.label ?? "";
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
   return [cond, text].filter(Boolean).join(" ");
 }
 
@@ -191,6 +264,7 @@ export function toFlow(graph: DialogueGraph, saved: Map<string, { x: number; y: 
   const back = findBackEdges(graph);
   const auto = layout(graph, back);
 
+<<<<<<< HEAD
   const nodes: FlowNode[] = graph.nodes.map((node) => ({
     id: node.id,
     type: "dialogue",
@@ -219,6 +293,33 @@ export function toFlow(graph: DialogueGraph, saved: Map<string, { x: number; y: 
       style: { ...style },
       markerEnd: { type: "arrowclosed", color: style.stroke },
       data: { kind: edge.kind, condition: edge.condition, backEdge: isBack, lane: isBack ? lane++ : 0, rotateLabels },
+=======
+  const nodes: FlowNode[] = graph.nodes.map((n) => ({
+    id: n.id,
+    type: "dialogue",
+    // Saved NodePosition wins; auto-layout only fills gaps (design doc 3.2.3).
+    position: saved.get(n.id) ?? (vertical ? { x: auto.get(n.id)!.y * 1.6, y: auto.get(n.id)!.x } : { x: auto.get(n.id)!.x, y: auto.get(n.id)!.y }),
+    data: n,
+    style: { width: NODE_W, height: nodeHeight(n) },
+  }));
+
+  let lane = 0;
+  const edges: FlowEdge[] = graph.edges.map((e) => {
+    const isBack = back.has(e.id);
+    const style = EDGE_STYLE[e.kind];
+    return {
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: "out",
+      targetHandle: "in",
+      type: isBack && !vertical ? "loop" : "default",
+      label: edgeLabel(e),
+      labelStyle: { transform: rotateLabels ? "rotate(-90deg)" : "none", transformBox: "fill-box", transformOrigin: "center" },
+      style: { ...style },
+      markerEnd: { type: "arrowclosed", color: style.stroke },
+      data: { kind: e.kind, condition: e.condition, backEdge: isBack, lane: isBack ? lane++ : 0, rotateLabels },
+>>>>>>> d719bd9 (git init -- initial demo of markdown to GUI)
     };
   });
 

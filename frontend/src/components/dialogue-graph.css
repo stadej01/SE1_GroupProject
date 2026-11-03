@@ -1,23 +1,110 @@
-.dlg-canvas { position: relative; width: 100%; height: 100%; font-family: "IBM Plex Sans", system-ui, sans-serif; }
-.dlg-node {
-  box-sizing: border-box; width: 100%; min-height: 100%;
-  background: #fff; border: 1px solid #d4d4d8; border-radius: 6px;
-  display: flex; flex-direction: column; overflow: hidden;
+
+.dlg-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
 }
-/* Title bar: background comes from the node's color (set inline in DialogueNode). */
-.dlg-node__id { padding: 6px 12px; font-weight: 600; font-size: 13px; color: #fff;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dlg-node__body { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
-.dlg-node__preview { font-size: 12px; line-height: 1.4; color: #4b5563;
-  white-space: pre-wrap; overflow-wrap: anywhere; }
-.dlg-node__line + .dlg-node__line { margin-top: 5px; }
-.dlg-node__missing { font-size: 12px; color: #b23a48; }
-.dlg-node__category { font-size: 11px; color: #6b7280; }
-.dlg-edge-label { position: absolute; pointer-events: all; font-size: 11px; padding: 2px 6px;
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; color: #374151; }
-.react-flow__edge-text { font-size: 11px; }
-.dlg-legend { position: absolute; top: 12px; right: 12px; display: grid; grid-template-columns: auto auto;
-  gap: 6px 8px; align-items: center; padding: 8px 10px; font-size: 12px;
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; }
-.dlg-diagnostics { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 8px 12px 8px 28px;
-  max-width: 420px; font-size: 12px; color: #b23a48; background: #fff; border: 1px solid #f1c4c9; border-radius: 6px; }
+
+/* Dialogue node container */
+.dlg-node {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  background: #fff;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+/* Node title bar uses the color defined in DialogueNode */
+.dlg-node__id {
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: 5px 5px 0 0;
+}
+
+/* Container for dialogue lines */
+.dlg-node__body {
+  padding: 8px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dlg-node__preview {
+  font-size: 12px;
+  line-height: 1.4;
+  color: #4b5563;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Spacing between multiple dialogue lines */
+.dlg-node__line + .dlg-node__line {
+  margin-top: 5px;
+}
+
+.dlg-node__missing {
+  font-size: 12px;
+  color: #b23a48;
+}
+
+.dlg-node__category {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Labels displayed on graph connections */
+.dlg-edge-label {
+  position: absolute;
+  pointer-events: all;
+  font-size: 11px;
+  padding: 2px 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  color: #374151;
+}
+
+.react-flow__edge-text {
+  font-size: 11px;
+}
+
+/* Graph legend */
+.dlg-legend {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 6px 8px;
+  align-items: center;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+/* Parser and validation errors */
+.dlg-diagnostics {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  margin: 0;
+  padding: 8px 12px 8px 28px;
+  max-width: 420px;
+  font-size: 12px;
+  color: #b23a48;
+  background: #fff;
+  border: 1px solid #f1c4c9;
+  border-radius: 6px;
+}
