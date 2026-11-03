@@ -1,15 +1,19 @@
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.conf import settings
 from .models import Draft
+
 
 VALID = '# A\nNarrator: Hello.\n* "Go" -> B\n# B\nNarrator: Goodbye.'
 
 class EditorTests(TestCase):
     def setUp(self):
         self.client = Client(enforce_csrf_checks=True)
+        
         response = self.client.get(reverse("editor:index"))
         self.assertEqual(response.status_code, 200)
-        self.client.cookies[settings.CSRF_COOKIE_NAME]
+        # Retrieve the CSRF token for authenticated requests.
+        self.token = self.client.cookies[settings.CSRF_COOKIE_NAME].value
 
     def post_sync(self, source):
         return self.client.post(reverse("editor:sync"), {"markdown_source": source},
