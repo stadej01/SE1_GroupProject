@@ -9,7 +9,7 @@ class EditorTests(TestCase):
         self.client = Client(enforce_csrf_checks=True)
         response = self.client.get(reverse("editor:index"))
         self.assertEqual(response.status_code, 200)
-        self.token = self.client.cookies["csrftoken"].value
+        self.client.cookies[settings.CSRF_COOKIE_NAME]
 
     def post_sync(self, source):
         return self.client.post(reverse("editor:sync"), {"markdown_source": source},
