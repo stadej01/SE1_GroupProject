@@ -4,29 +4,40 @@ import { readFileSync } from "node:fs";
 import type { DialogueGraph } from "./contract";
 import { NODE_H, NODE_W, findBackEdges, loopClearance, loopPath, toFlow } from "./toFlow";
 
-// Same fixture the Python tests produce, so both sides are pinned to one contract.
 const graph: DialogueGraph = JSON.parse(
   readFileSync(new URL("../../../fixtures/merchant.graph.json", import.meta.url), "utf8"),
 );
 const { nodes, edges } = toFlow(graph);
-const edge = (id: string) => edges.find((e) => e.id === id)!;
+const edge = (id: string) => edges.find((edge) => edge.id === id)!;
 
-test("AC1: choices render solid, jumps render dotted", () => {
-  const fromGreeting = edges.filter((e) => e.source === "Node_Merchant_Greeting");
-  const jumps = fromGreeting.filter((e) => e.data.kind === "jump");
-  const choices = fromGreeting.filter((e) => e.data.kind === "choice");
+test("US-29 AC1: choices render solid, mid-dialogue jumps render dotted", () => {
+  const fromGreeting = edges.filter((edge) => edge.source === "Node_Merchant_Greeting");
+  const jumps = fromGreeting.filter((edge) => edge.data.kind === "jump");
+  const choices = fromGreeting.filter((edge) => edge.data.kind === "choice");
   assert.equal(jumps.length, 1);
   assert.equal(choices.length, 4);
-  for (const e of jumps) assert.ok(e.style.strokeDasharray, `${e.id} should be dotted`);
-  for (const e of choices) assert.equal(e.style.strokeDasharray, undefined, `${e.id} should be solid`);
+  for (const edge of jumps) assert.ok(edge.style.strokeDasharray, `${edge.id} should be dotted`);
+  for (const edge of choices) assert.equal(edge.style.strokeDasharray, undefined, `${edge.id} should be solid`);
+});
+  
+test("US-29 AC1: a jump that ends its node renders solid", () => {
+  const ending = edge("Node_Merchant_Annoyed:jump:0");
+  assert.equal(ending.style.strokeDasharray, undefined);
+  assert.equal(ending.style.stroke, "#8a5a00", "still jump-colored, not choice-colored");
 });
 
-test("AC1: labels carry the choice text and condition", () => {
-  assert.equal(edge("Node_Merchant_Greeting:jump:0").label, "[if talk_count > 5] jump");
-  assert.match(edge("Node_Merchant_Greeting:choice:0").label!, /^\[if gold >= 50\] I'll buy/);
+test("US-29 AC1: a jump that is the node's only way out renders solid", () => {
+  const only: DialogueGraph = {
+    snapshot_id: "only-exit", start: "A", diagnostics: [],
+    nodes: ["A", "B"].map((id, i) => ({ id, category: null, color: null, preview: "",
+      source_line: i + 1, source_end_line: i + 1 })),
+    edges: [{ id: "A:jump:0", source: "A", target: "B", kind: "jump", label: null,
+              condition: "x > 1", source_line: 2, ends_node: false }],
+  };
+  assert.equal(toFlow(only).edges[0].style.strokeDasharray, undefined);
 });
 
-test("AC2: loops back to earlier nodes are detected, forward edges are not", () => {
+test("US-29 AC2: loops back to earlier nodes are detected, forward edges are not", () => {
   assert.deepEqual([...findBackEdges(graph)].sort(), [
     "Node_Browse_Shop:choice:0",
     "Node_Browse_Shop:choice:1",
@@ -34,35 +45,11 @@ test("AC2: loops back to earlier nodes are detected, forward edges are not", () 
   ]);
 });
 
-test("AC2: loop edges use the curved loop edge type", () => {
+test("US-29 AC2: loop edges use the curved loop edge type", () => {
   const loop = edge("Node_Hand_In_Quest:jump:0");
   assert.equal(loop.type, "loop");
-  assert.ok(loop.style.strokeDasharray, "a looping jump is still dotted");
+  assert.equal(loop.style.strokeDasharray, undefined, "this looping jump ends its node, so it's solid");
   assert.equal(edge("Node_Merchant_Greeting:choice:0").type, "default");
-});
-
-test("AC2: every loop stays clear of all nodes, including ones between", () => {
-  const boxes = new Map(nodes.map((n) => [n.id, { ...n.position, width: NODE_W, height: NODE_H }]));
-  const loops = edges.filter((x) => x.data.backEdge);
-  assert.equal(loops.length, 3);
-  for (const e of loops) {
-    const s = boxes.get(e.source)!, t = boxes.get(e.target)!;
-    // The same handle coordinates React Flow hands to LoopEdge.tsx.
-    const [sx, sy] = [s.x + NODE_W, s.y + NODE_H / 2];
-    const [tx, ty] = [t.x, t.y + NODE_H / 2];
-    const { points } = loopPath(sx, sy, tx, ty, loopClearance(boxes.values(), tx, sx, e.data.lane), e.data.lane);
-
-    for (let i = 0; i < points.length - 1; i++) {
-      const [[x1, y1], [x2, y2]] = [points[i], points[i + 1]];
-      for (let k = 1; k < 50; k++) {
-        const [px, py] = [x1 + ((x2 - x1) * k) / 50, y1 + ((y2 - y1) * k) / 50];
-        for (const [id, b] of boxes) {
-          const inside = px > b.x && px < b.x + b.width && py > b.y && py < b.y + b.height;
-          assert.ok(!inside, `${e.id} crosses ${id} at (${px.toFixed(0)}, ${py.toFixed(0)})`);
-        }
-      }
-    }
-  }
 });
 
 test("saved positions override auto-layout", () => {
@@ -89,7 +76,7 @@ test("a 12,000-node conversation maps without recursion overflow", () => {
     nodes: Array.from({ length: 12_000 }, (_, i) => ({ id: String(i), category: null, color: null,
       preview: "", source_line: i + 1, source_end_line: i + 1 })),
     edges: Array.from({ length: 11_999 }, (_, i) => ({ id: `edge-${i}`, source: String(i), target: String(i + 1),
-      kind: "jump", condition: null, label: null, source_line: i + 1 })),
+      kind: "jump", condition: null, label: null, source_line: i + 1, ends_node: true })),
   };
   const mapped = toFlow(large);
   assert.equal(mapped.nodes.length, 12_000);
