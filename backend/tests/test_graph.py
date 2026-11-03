@@ -14,14 +14,14 @@ def graph_for(md):
 class MerchantFixture(unittest.TestCase):
     def setUp(self):
         self.graph = graph_for((FIXTURES / "merchant.md").read_text(encoding="utf-8"))
-        self.edges = {e["id"]: e for e in self.graph["edges"]}
+        self.edges = {edge["id"]: edge for edge in self.graph["edges"]}
 
     def test_parses_cleanly(self):
         self.assertEqual(self.graph["diagnostics"], [])
 
     def test_greeting_has_jump_and_choice_edges(self):  # US-29 AC1 input
-        out = [e for e in self.graph["edges"] if e["source"] == "Node_Merchant_Greeting"]
-        self.assertEqual([e["kind"] for e in out], ["jump"] + ["choice"] * 4)
+        out = [edge for edge in self.graph["edges"] if edge["source"] == "Node_Merchant_Greeting"]
+        self.assertEqual([edge["kind"] for edge in out], ["jump"] + ["choice"] * 4)
 
     def test_jump_keeps_condition_and_target(self):
         jump = self.edges["Node_Merchant_Greeting:jump:0"]
@@ -45,6 +45,16 @@ class MerchantFixture(unittest.TestCase):
     def test_loops_are_preserved_as_edges(self):  # US-29 AC2 input
         self.assertEqual(self.edges["Node_Hand_In_Quest:jump:0"]["target"], "Node_Merchant_Greeting")
         self.assertEqual(self.edges["Node_Browse_Shop:choice:1"]["target"], "Node_Browse_Shop")
+
+    def test_jump_at_end_of_node_is_marked(self):
+        self.assertTrue(self.edges["Node_Merchant_Annoyed:jump:0"]["ends_node"])
+        self.assertTrue(self.edges["Node_Hand_In_Quest:jump:0"]["ends_node"])
+
+    def test_mid_dialogue_jump_is_not_marked(self):
+        self.assertFalse(self.edges["Node_Merchant_Greeting:jump:0"]["ends_node"])
+
+    def test_choices_never_marked(self):
+        self.assertFalse(any(edge["ends_node"] for edge in self.graph["edges"] if edge["kind"] == "choice"))
 
     def test_matches_checked_in_contract(self):
         """Compare existing JSON contract fields while allowing newer node metadata."""

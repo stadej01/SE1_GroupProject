@@ -1,10 +1,13 @@
 .dlg-canvas { position: relative; width: 100%; height: 100%; font-family: "IBM Plex Sans", system-ui, sans-serif; }
 .dlg-node {
-  box-sizing: border-box; width: 100%; min-height: 100%; padding: 10px 12px;
+  box-sizing: border-box; width: 100%; min-height: 100%;
   background: #fff; border: 1px solid #d4d4d8; border-radius: 6px;
-  display: flex; flex-direction: column; gap: 6px; overflow: visible;
+  display: flex; flex-direction: column; overflow: hidden;
 }
-.dlg-node__id { font-weight: 600; font-size: 13px; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Title bar: background comes from the node's color (set inline in DialogueNode). */
+.dlg-node__id { padding: 6px 12px; font-weight: 600; font-size: 13px; color: #fff;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg-node__body { padding: 8px 12px 10px; display: flex; flex-direction: column; gap: 6px; }
 .dlg-node__preview { font-size: 12px; line-height: 1.4; color: #4b5563;
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .dlg-node__line + .dlg-node__line { margin-top: 5px; }
