@@ -1,6 +1,6 @@
-"""SQLite-only test settings for accounts/teams; NEVER connects to Neon.
+"""SQLite-only test settings for accounts, teams, and projects; NEVER connects to Neon.
 
-Usage: python manage.py test accounts teams config --settings=config.settings_auth_test
+Usage: python manage.py test accounts teams config projects --settings=config.settings_auth_test
 """
 import os
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
