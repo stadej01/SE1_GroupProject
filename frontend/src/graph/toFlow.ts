@@ -1,6 +1,18 @@
-// Pure functions: dialogue graph contract -> React Flow nodes/edges.
-// No React or @xyflow imports, so everything here runs under `node --test`.
-// The object shapes are structurally compatible with @xyflow/react's Node and Edge.
+/**
+ * Converts the dialogue graph contract into the nodes and edges that React Flow draws.
+ *
+ * Every function here is pure and imports neither React nor @xyflow/react, so
+ * the logic runs under `node --test` without a browser. The returned objects
+ * match the structure of React Flow's Node and Edge types, so DialogueGraph.tsx
+ * can pass them straight to <ReactFlow>.
+ *
+ * - Choices are solid. Jumps are solid when they end their node or are its only
+ *   exit; other jumps are dotted.
+ * - A depth-first search marks edges that point back to a node on the current
+ *   path, including self-loops.
+ * - Nodes use a left-to-right layered layout, with vertical layout available.
+ * - Loop edges travel through column gaps and under every node in their span.
+ */
 
 import type { DialogueGraph, GraphEdge, GraphNode } from "./contract";
 
@@ -8,26 +20,60 @@ export const NODE_W = 240;
 export const NODE_H = 96;
 
 /** Reserve enough space for dialogue wrapping before React Flow measures nodes. */
-export function nodeHeight(n: GraphNode): number {
-  const lines = n.dialogue_lines?.length
-    ? n.dialogue_lines.map((line) => `${line.speaker}: ${line.text}`)
-    : [n.preview || "No dialogue lines"];
-  const wrappedLines = lines.reduce((total, line) =>
-    total + Math.max(1, ...line.split("\n").map((part) => Math.ceil(part.length / 16))), 0);
-  return Math.max(NODE_H, 64 + wrappedLines * 19 + Math.max(0, lines.length - 1) * 5);
+export function nodeHeight(node: GraphNode): number {
+  const lines = node.dialogue_lines?.length
+    ? node.dialogue_lines.map((line) => `${line.speaker}: ${line.text}`)
+    : [node.preview || "No dialogue lines"];
+  const wrappedLines = lines.reduce(
+    (total, line) =>
+      total +
+      Math.max(
+        1,
+        ...line.split("\n").map((part) => Math.ceil(part.length / 16))
+      ),
+    0
+  );
+
+  return Math.max(
+    NODE_H,
+    64 + wrappedLines * 19 + Math.max(0, lines.length - 1) * 5
+  );
 }
+
 const GAP_X = 120;
 const GAP_Y = 48;
-export const LOOP_MARGIN = 28; // clearance below the lowest node a loop passes under
-const LANE_STEP = 16;          // extra drop per stacked loop so loops don't overlap
+export const LOOP_MARGIN = 28;
+const LANE_STEP = 16;
 
-// AC1: choices solid, jumps dotted.
 export const EDGE_STYLE = {
   choice: { stroke: "#3d5a80", strokeWidth: 1.75 },
-  jump: { stroke: "#8a5a00", strokeWidth: 1.75, strokeDasharray: "2 5", strokeLinecap: "round" },
+  jump: { stroke: "#8a5a00", strokeWidth: 1.75 },
+  midJump: {
+    stroke: "#8a5a00",
+    strokeWidth: 1.75,
+    strokeDasharray: "2 5",
+    strokeLinecap: "round",
+  },
 } as const;
 
-export interface Box { x: number; y: number; width: number; height: number }
+/**
+ * A jump is solid if it ends its node or is its only exit. Mid-node jumps with
+ * dialogue or choices after them are dotted.
+ */
+export function edgeStyle(edge: GraphEdge, outgoingCount: number) {
+  if (edge.kind === "choice") return EDGE_STYLE.choice;
+  const endsNode = "ends_node" in edge && edge.ends_node === true;
+  return endsNode || outgoingCount === 1
+    ? EDGE_STYLE.jump
+    : EDGE_STYLE.midJump;
+}
+
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export interface FlowNode {
   id: string;
@@ -48,101 +94,149 @@ export interface FlowEdge {
   labelStyle?: Record<string, string>;
   style: Record<string, string | number>;
   markerEnd: { type: "arrowclosed"; color: string };
-  data: { kind: GraphEdge["kind"]; condition: string | null; backEdge: boolean; lane: number; rotateLabels: boolean };
+  data: {
+    kind: GraphEdge["kind"];
+    condition: string | null;
+    backEdge: boolean;
+    lane: number;
+    rotateLabels: boolean;
+  };
 }
 
-/** Edges that point back to a node already on the DFS path from the start (includes self-loops). */
+function startNodeIds(graph: DialogueGraph): Set<string> {
+  const starts = Array.isArray(graph.start_nodes) ? graph.start_nodes : [];
+  const legacyStart =
+    "start" in graph && typeof graph.start === "string" ? [graph.start] : [];
+  return new Set([...starts, ...legacyStart]);
+}
+
+/** Edges that point back to a node already on the DFS path, including self-loops. */
 export function findBackEdges(graph: DialogueGraph): Set<string> {
-  const out = new Map<string, GraphEdge[]>();
-  for (const e of graph.edges) {
-    if (!out.has(e.source)) out.set(e.source, []);
-    out.get(e.source)!.push(e);
+  const outgoing = new Map<string, GraphEdge[]>();
+  for (const edge of graph.edges) {
+    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+    outgoing.get(edge.source)!.push(edge);
   }
 
-  const back = new Set<string>();
+  const backEdges = new Set<string>();
   const state = new Map<string, "active" | "done">();
-  const roots = [...graph.start_nodes, ...graph.nodes.map((n) => n.id)];
-  // Explicit stack avoids a JavaScript recursion overflow on long conversations.
+  const roots = [
+    ...startNodeIds(graph),
+    ...graph.nodes.map((node) => node.id),
+  ];
+
+  // An explicit stack avoids recursion overflow on long conversations.
   for (const id of roots) {
     if (state.has(id)) continue;
     state.set(id, "active");
     const stack = [{ id, next: 0 }];
+
     while (stack.length) {
       const frame = stack[stack.length - 1];
-      const edges = out.get(frame.id) ?? [];
+      const edges = outgoing.get(frame.id) ?? [];
       if (frame.next === edges.length) {
         state.set(frame.id, "done");
         stack.pop();
         continue;
       }
+
       const edge = edges[frame.next++];
       const targetState = state.get(edge.target);
-      if (targetState === "active") back.add(edge.id);
-      else if (targetState === undefined) {
+      if (targetState === "active") {
+        backEdges.add(edge.id);
+      } else if (targetState === undefined) {
         state.set(edge.target, "active");
         stack.push({ id: edge.target, next: 0 });
       }
     }
   }
-  return back;
+
+  return backEdges;
 }
 
-/** Left-to-right layered layout: rank = longest forward path from a root. */
-export function layout(graph: DialogueGraph, back: Set<string>): Map<string, Box> {
-  const forward = graph.edges.filter((e) => !back.has(e.id));
+/** Left-to-right layered layout: rank is the longest forward path from a root. */
+export function layout(
+  graph: DialogueGraph,
+  backEdges: Set<string>
+): Map<string, Box> {
+  const forward = graph.edges.filter((edge) => !backEdges.has(edge.id));
   const outgoing = new Map<string, GraphEdge[]>();
-  const indegree = new Map(graph.nodes.map((n) => [n.id, 0]));
-  for (const e of forward) {
-    indegree.set(e.target, (indegree.get(e.target) ?? 0) + 1);
-    if (!outgoing.has(e.source)) outgoing.set(e.source, []);
-    outgoing.get(e.source)!.push(e);
+  const indegree = new Map(graph.nodes.map((node) => [node.id, 0]));
+
+  for (const edge of forward) {
+    indegree.set(edge.target, (indegree.get(edge.target) ?? 0) + 1);
+    if (!outgoing.has(edge.source)) outgoing.set(edge.source, []);
+    outgoing.get(edge.source)!.push(edge);
   }
 
-  const rank = new Map(graph.nodes.map((n) => [n.id, 0]));
-  const queue = graph.nodes.filter((n) => indegree.get(n.id) === 0).map((n) => n.id);
+  const rank = new Map(graph.nodes.map((node) => [node.id, 0]));
+  const queue = graph.nodes
+    .filter((node) => indegree.get(node.id) === 0)
+    .map((node) => node.id);
   for (let cursor = 0; cursor < queue.length; cursor++) {
     const id = queue[cursor];
-    for (const e of outgoing.get(id) ?? []) {
-      rank.set(e.target, Math.max(rank.get(e.target)!, rank.get(id)! + 1));
-      indegree.set(e.target, indegree.get(e.target)! - 1);
-      if (indegree.get(e.target) === 0) queue.push(e.target);
+    for (const edge of outgoing.get(id) ?? []) {
+      rank.set(
+        edge.target,
+        Math.max(rank.get(edge.target)!, rank.get(id)! + 1)
+      );
+      indegree.set(edge.target, indegree.get(edge.target)! - 1);
+      if (indegree.get(edge.target) === 0) queue.push(edge.target);
     }
   }
 
   const nextYInRank = new Map<number, number>();
   const boxes = new Map<string, Box>();
-  for (const n of graph.nodes) {
-    const r = rank.get(n.id)!;
-    const y = nextYInRank.get(r) ?? 0;
-    const height = nodeHeight(n);
-    nextYInRank.set(r, y + height + GAP_Y);
-    boxes.set(n.id, { x: r * (NODE_W + GAP_X), y, width: NODE_W, height });
+  for (const node of graph.nodes) {
+    const nodeRank = rank.get(node.id)!;
+    const y = nextYInRank.get(nodeRank) ?? 0;
+    const height = nodeHeight(node);
+    nextYInRank.set(nodeRank, y + height + GAP_Y);
+    boxes.set(node.id, {
+      x: nodeRank * (NODE_W + GAP_X),
+      y,
+      width: NODE_W,
+      height,
+    });
   }
+
   return boxes;
 }
 
-/** Lowest y a loop between x1 and x2 must stay below so it doesn't cross any node in that span. */
-export function loopClearance(boxes: Iterable<Box>, x1: number, x2: number, lane = 0): number {
+/** Lowest y a loop must pass to avoid nodes in the horizontal span. */
+export function loopClearance(
+  boxes: Iterable<Box>,
+  x1: number,
+  x2: number,
+  lane = 0
+): number {
   const [lo, hi] = x1 < x2 ? [x1, x2] : [x2, x1];
   let bottom = -Infinity;
-  for (const b of boxes) {
-    if (b.x <= hi && b.x + b.width >= lo) bottom = Math.max(bottom, b.y + b.height);
+  for (const box of boxes) {
+    if (box.x <= hi && box.x + box.width >= lo) {
+      bottom = Math.max(bottom, box.y + box.height);
+    }
   }
   return bottom + LOOP_MARGIN + lane * LANE_STEP;
 }
 
-export const LOOP_GUTTER = GAP_X / 2 - 12; // how far into the column gap a loop travels
+export const LOOP_GUTTER = GAP_X / 2 - 12;
 const RADIUS = 14;
 
 /**
- * AC2: route a loop around the nodes instead of through them. It leaves the
- * source's right side, drops down the empty gap between columns, runs under
- * every node in the span (at clearY), and rises up the gap left of the target
- * into its left side. Corners are rounded so the edge reads as one curve.
- * `points` are the corners, used by tests to prove nothing is crossed.
+ * Route a loop out the source's right side, under every node in its span, and
+ * back through the gap left of the target. `points` are the corners used by
+ * tests to check that no nodes are crossed.
  */
-export function loopPath(sx: number, sy: number, tx: number, ty: number, clearY: number, lane = 0) {
-  // Extra loops get vertical lanes; never shift a side gutter inside a node.
+export function loopPath(
+  sx: number,
+  sy: number,
+  tx: number,
+  ty: number,
+  clearY: number,
+  lane = 0
+) {
+  // Additional loops get deeper lanes without moving a side gutter into a node.
   const gutter = Math.max(RADIUS + 4, LOOP_GUTTER - lane * 12);
   const xr = sx + gutter;
   const xl = tx - gutter;
@@ -155,46 +249,92 @@ export function loopPath(sx: number, sy: number, tx: number, ty: number, clearY:
     `L ${xl},${ty + r} Q ${xl},${ty} ${xl + r},${ty}`,
     `L ${tx},${ty}`,
   ].join(" ");
-  const points = [[sx, sy], [xr, sy], [xr, clearY], [xl, clearY], [xl, ty], [tx, ty]] as const;
+  const points = [
+    [sx, sy],
+    [xr, sy],
+    [xr, clearY],
+    [xl, clearY],
+    [xl, ty],
+    [tx, ty],
+  ] as const;
+
   return { path, points, labelX: (xr + xl) / 2, labelY: clearY };
 }
 
-function edgeLabel(e: GraphEdge): string | undefined {
-  const cond = e.condition ? `[if ${e.condition}]` : "";
-  if (e.kind === "jump") return cond ? `${cond} jump` : "jump";
-  const text = e.label && e.label.length > 28 ? `${e.label.slice(0, 27)}…` : e.label ?? "";
-  return [cond, text].filter(Boolean).join(" ");
+function edgeLabel(edge: GraphEdge): string | undefined {
+  const condition = edge.condition ? `[if ${edge.condition}]` : "";
+  if (edge.kind === "jump") return condition ? `${condition} jump` : "jump";
+
+  const text =
+    edge.label && edge.label.length > 28
+      ? `${edge.label.slice(0, 27)}…`
+      : edge.label ?? "";
+  return [condition, text].filter(Boolean).join(" ");
 }
 
-export function toFlow(graph: DialogueGraph, saved: Map<string, { x: number; y: number }> = new Map(), vertical = false, rotateLabels = false) {
-  const back = findBackEdges(graph);
-  const auto = layout(graph, back);
+export function toFlow(
+  graph: DialogueGraph,
+  saved: Map<string, { x: number; y: number }> = new Map(),
+  vertical = false,
+  rotateLabels = false
+) {
+  const backEdges = findBackEdges(graph);
+  const auto = layout(graph, backEdges);
+  const starts = startNodeIds(graph);
 
-  const nodes: FlowNode[] = graph.nodes.map((n) => ({
-    id: n.id,
-    type: "dialogue",
-    // Saved NodePosition wins; auto-layout only fills gaps (design doc 3.2.3).
-    position: saved.get(n.id) ?? (vertical ? { x: auto.get(n.id)!.y * 1.6, y: auto.get(n.id)!.x } : { x: auto.get(n.id)!.x, y: auto.get(n.id)!.y }),
-    data: { ...n, is_start: graph.start_nodes.includes(n.id) },
-    style: { width: NODE_W, height: nodeHeight(n) },
-  }));
+  const nodes: FlowNode[] = graph.nodes.map((node) => {
+    const position = auto.get(node.id)!;
+    return {
+      id: node.id,
+      type: "dialogue",
+      // Saved positions take priority; auto-layout fills nodes without one.
+      position:
+        saved.get(node.id) ??
+        (vertical
+          ? { x: position.y * 1.6, y: position.x }
+          : { x: position.x, y: position.y }),
+      data: {
+        ...node,
+        is_start: starts.has(node.id),
+      },
+      style: { width: NODE_W, height: nodeHeight(node) },
+    };
+  });
+
+  const outgoingCount = new Map<string, number>();
+  for (const edge of graph.edges) {
+    outgoingCount.set(
+      edge.source,
+      (outgoingCount.get(edge.source) ?? 0) + 1
+    );
+  }
 
   let lane = 0;
-  const edges: FlowEdge[] = graph.edges.map((e) => {
-    const isBack = back.has(e.id);
-    const style = EDGE_STYLE[e.kind];
+  const edges: FlowEdge[] = graph.edges.map((edge) => {
+    const isBackEdge = backEdges.has(edge.id);
+    const style = edgeStyle(edge, outgoingCount.get(edge.source)!);
     return {
-      id: e.id,
-      source: e.source,
-      target: e.target,
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
       sourceHandle: "out",
       targetHandle: "in",
-      type: isBack && !vertical ? "loop" : "default",
-      label: edgeLabel(e),
-      labelStyle: { transform: rotateLabels ? "rotate(-90deg)" : "none", transformBox: "fill-box", transformOrigin: "center" },
+      type: isBackEdge && !vertical ? "loop" : "default",
+      label: edgeLabel(edge),
+      labelStyle: {
+        transform: rotateLabels ? "rotate(-90deg)" : "none",
+        transformBox: "fill-box",
+        transformOrigin: "center",
+      },
       style: { ...style },
       markerEnd: { type: "arrowclosed", color: style.stroke },
-      data: { kind: e.kind, condition: e.condition, backEdge: isBack, lane: isBack ? lane++ : 0, rotateLabels },
+      data: {
+        kind: edge.kind,
+        condition: edge.condition,
+        backEdge: isBackEdge,
+        lane: isBackEdge ? lane++ : 0,
+        rotateLabels,
+      },
     };
   });
 

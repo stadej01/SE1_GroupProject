@@ -10,12 +10,12 @@ test("Django page parses, maps node selection, and refreshes dialogue-only edits
   await expect(page.locator(".react-flow__edge")).toHaveCount(11);
   const greeting = page.locator('.react-flow__node[data-id="Node_Merchant_Greeting"]');
   await greeting.click();
-  const selected = await page.locator("#markdown-source").evaluate((textarea: HTMLTextAreaElement) =>
+  const selected = await page.locator("textarea").evaluate((textarea: HTMLTextAreaElement) =>
     textarea.value.slice(textarea.selectionStart, textarea.selectionEnd));
   expect(selected).toContain("# Node_Merchant_Greeting");
   expect(selected).not.toContain("# Node_Merchant_Annoyed");
-  const original = await page.locator("#markdown-source").inputValue();
-  await page.locator("#markdown-source").fill(original.replace("Ah, welcome back, traveler!", "Welcome to our updated shop!"));
+  const original = await page.locator("textarea").inputValue();
+  await page.locator("textarea").fill(original.replace("Ah, welcome back, traveler!", "Welcome to our updated shop!"));
   await expect(page.locator(".react-flow__node")).toHaveCount(0);
   await page.getByRole("button", { name: "Parse Markdown" }).click();
   await expect(greeting).toContainText("Welcome to our updated shop!");
@@ -26,18 +26,18 @@ test("Django page parses, maps node selection, and refreshes dialogue-only edits
 test("invalid Markdown saves and reloads but cannot produce a graph", async ({ page }) => {
   await page.goto("/");
   const invalid = "# A\nNarrator: Still editable.\n??? unsupported syntax";
-  await page.locator("#markdown-source").fill(invalid);
+  await page.locator("textarea").fill(invalid);
   await page.getByRole("button", { name: "Save draft", exact: true }).click();
   await expect(page.locator("#save-status")).toHaveText("Draft saved");
   await page.getByRole("button", { name: "Parse Markdown" }).click();
   await expect(page.locator("#diagnostics")).toContainText("Line 3:");
   await expect(page.locator(".react-flow__node")).toHaveCount(0);
   await page.getByRole("button", { name: /Line 3:/ }).click();
-  const selected = await page.locator("#markdown-source").evaluate((textarea: HTMLTextAreaElement) =>
+  const selected = await page.locator("textarea").evaluate((textarea: HTMLTextAreaElement) =>
     textarea.value.slice(textarea.selectionStart, textarea.selectionEnd));
   expect(selected).toBe("??? unsupported syntax");
   await page.reload();
-  await expect(page.locator("#markdown-source")).toHaveValue(invalid);
+  await expect(page.locator("textarea")).toHaveValue(invalid);
   await expect(page.locator(".react-flow__node")).toHaveCount(0);
 });
 
@@ -58,7 +58,7 @@ test("a delayed parse cannot restore a graph after the source changes", async ({
   });
   await page.getByRole("button", { name: "Parse Markdown" }).click();
   await ready;
-  await page.locator("#markdown-source").fill("# New\nNarrator: Different snapshot.");
+  await page.locator("textarea").fill("# New\nNarrator: Different snapshot.");
   release();
   await delivered;
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
