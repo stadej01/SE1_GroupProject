@@ -8,3 +8,10 @@ class HealthCheckTests(SimpleTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok"})
+
+    def test_health_endpoint_rejects_other_methods(self):
+        for method in ("options", "post"):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(reverse("health"))
+
+                self.assertEqual(response.status_code, 405)
