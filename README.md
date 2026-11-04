@@ -93,3 +93,5 @@ Django creates a separate test database. Use a development database role with
 permission to create the test database.
 
 The `teams` tests cover membership checks (a member, a non-member, and an anonymous user) and the rule that a user can belong to a team only once.
+
+Updates have been added to add the starting node
