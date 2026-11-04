@@ -1,0 +1,11 @@
+{
+  "src/main.tsx": {
+    "file": "assets/main-BaInU853.js",
+    "name": "main",
+    "src": "src/main.tsx",
+    "isEntry": true,
+    "css": [
+      "assets/main-BoyDN2cr.css"
+    ]
+  }
+}
