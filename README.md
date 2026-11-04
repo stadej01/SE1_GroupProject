@@ -237,6 +237,8 @@ Keep this terminal open in `backend/` with the virtual environment active. The s
 
 2. Open **Connect**, turn off **Connection pooling**, and copy the connection string. You'll use it in step 4.
 
+   ![The Neon Connect dialog with Connection pooling turned off and the password and host hidden](docs/images/project-api/neon-connect.png)
+
 #### 3. Create a private GitHub repository and token
 
 1. Create a **private** repository at <https://github.com/new> and select **Add a README file**, so the `main` branch exists.
