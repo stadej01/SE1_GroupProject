@@ -33,6 +33,7 @@ textarea::selection { background: #cde1fb; }
 .empty-state p { max-width: 290px; font-size: 13px; line-height: 1.7; color: #77899c; margin: 0; }
 .empty-glyph { border: 1px solid #d2deeb; border-radius: 12px; width: 62px; height: 62px; display: grid; place-items: center; font-size: 38px; color: #4f79a6; background: #eef4fb; }
 .diagnostics { margin: 0 24px 24px; background: #fff8f7; border: 1px solid #ebc8c3; border-radius: 8px; padding: 16px 20px; color: #893d3b; }
+.diagnostics[data-severity="warning"] { background: #fff9e9; border-color: #ead69b; color: #785b16; }
 .diagnostics h2 { font-size: 14px; margin: 0; }
 .diagnostics p { font-size: 12px; }
 .diagnostics ul { margin: 8px 0 0; padding-left: 20px; font-size: 12px; line-height: 1.8; }
@@ -52,6 +53,11 @@ textarea::selection { background: #cde1fb; }
 #node-edit-error {color:#ae2536;font-size:12px;}
 
 .graph-edit-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:12px; padding:10px 14px; border-bottom:1px solid #e4e9ef; font-size:12px; }
+.starting-node-picker { position:relative; }
+.starting-node-picker summary { cursor:pointer; padding:7px; border:1px solid #ccd5e0; border-radius:5px; background:#fff; }
+.starting-node-picker fieldset { position:absolute; z-index:20; top:100%; left:0; display:grid; gap:5px; max-height:260px; overflow:auto; min-width:220px; margin:4px 0; padding:10px; border:1px solid #ccd5e0; border-radius:6px; background:#fff; box-shadow:0 6px 18px #0002; }
+.starting-node-picker legend { padding:0 4px; font-size:11px; color:#63758b; }
+.starting-node-picker fieldset label { justify-content:flex-start; }
 .graph-edit-toolbar label { display:flex; align-items:center; gap:6px; }
 .graph-edit-toolbar select { padding:7px; border:1px solid #ccd5e0; border-radius:5px; }
 .graph-edit-toolbar input { width:auto; }

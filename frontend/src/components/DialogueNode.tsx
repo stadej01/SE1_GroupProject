@@ -13,7 +13,6 @@ const SWATCH: Record<string, string> = {
 type DialogueFlowNode = Node<GraphNode, "dialogue">;
 
 export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
-
   // Determine whether the graph is using vertical or horizontal layout.
   const vertical =
     document.querySelector<HTMLSelectElement>("#graph-layout")?.value === "vertical";
@@ -30,25 +29,27 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
         boxShadow: selected
           ? "0 0 0 3px #f5c542, 0 0 0 5px rgba(245,197,66,.28)"
           : undefined,
+        borderLeft: `6px solid ${accent}`,
       }}
     >
-      {/* Incoming connection handle */}
+      {/* One handle each side; loops are routed by LoopEdge, not by extra handles. */}
       <Handle
         type="target"
         position={vertical ? Position.Top : Position.Left}
         id="in"
       />
 
-      {/* Node ID with colored header */}
-      <div
-        className="dlg-node__id"
-        style={{ background: accent }}
-        title={data.id}
-      >
-        {data.id}
+      <div className="dlg-node__heading">
+        <div
+          className="dlg-node__id"
+          style={{ background: accent }}
+          title={data.id}
+        >
+          {data.id}
+        </div>
+        {data.is_start && <span className="dlg-node__start">START</span>}
       </div>
 
-      {/* Display all dialogue lines, not just the first */}
       <div className="dlg-node__body">
         <div className="dlg-node__preview">
           {data.dialogue_lines?.length
@@ -68,7 +69,6 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
             : (data.preview || "No dialogue lines")}
         </div>
 
-        {/* Display the category when available */}
         {data.category && (
           <div className="dlg-node__category">
             {data.category}
@@ -76,7 +76,6 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
         )}
       </div>
 
-      {/* Outgoing connection handle */}
       <Handle
         type="source"
         position={vertical ? Position.Bottom : Position.Right}

@@ -8,6 +8,7 @@ export interface GraphNode extends Record<string, unknown> {
   category: string | null;
   color: string | null;
   preview: string;
+  is_start?: boolean;
   metadata?: Record<string, string>;
   dialogue_lines?: { speaker: string; text: string; source_line: number }[];
   source_line: number;
@@ -22,8 +23,6 @@ export interface GraphEdge {
   label: string | null;
   condition: string | null;
   source_line: number;
-  /** True for a jump with nothing after it in its node. Always false for choices. */
-  ends_node: boolean;
 }
 
 export interface Diagnostic {
@@ -35,7 +34,7 @@ export interface Diagnostic {
 
 export interface DialogueGraph {
   snapshot_id: string;
-  start: string | null;
+  start_nodes: string[];
   nodes: GraphNode[];
   edges: GraphEdge[];
   diagnostics: Diagnostic[];

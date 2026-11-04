@@ -7,6 +7,8 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+!backend/editor/static/editor/dist/
+!backend/editor/static/editor/dist/**
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -22,3 +24,5 @@ __MACOSX/
 .TemporaryItems/
 .Trashes/
 
+# Coursework kept out of future commits
+/Homeworks/
