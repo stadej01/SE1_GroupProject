@@ -16,7 +16,7 @@ Both demos use the same source repository, but **they do not share a database**.
 
 - Terminal on macOS or PowerShell on Windows
 
-- Neon credentials and an existing admin account **only if you're running the accounts demo**
+- A free Neon account and a free GitHub account **only if you're running the accounts and project API demo**
 
 Start in the project root, the folder containing `backend/`, `frontend/`, and `fixtures/`.
 
@@ -49,11 +49,9 @@ Open **http://127.0.0.1:8000/**. The editor does not need Neon credentials.
 
 ### Terminal 3 — Accounts and teams (Neon, optional)
 
-First, create a `.env` file in the **project root** from `.env.example`. Ask the teammate managing Neon for the correct values for `DATABASE_URL` and `DJANGO_SECRET_KEY`. Do not commit `.env` to Git.
+The first time, follow [Set up Neon and GitHub](#set-up-neon-and-github), which uses your own free accounts, creates a `.env` file in the **project root**, and starts this server. If your team shares a database, ask the teammate managing it for the `.env` values instead. Do not commit `.env` to Git.
 
-To use your own database instead, activate the virtual environment from `backend/`, generate a key with `python -c "import secrets; print(secrets.token_urlsafe(50))"`, and put it in `DJANGO_SECRET_KEY`. Create a free Neon project, turn off **Connection pooling** in its **Connect** dialog, and copy the URL into `DATABASE_URL`. Then run `python manage.py migrate --settings=config.settings_neon` and `python manage.py createsuperuser --settings=config.settings_neon`.
-
-In a new terminal, starting from the project root:
+After that, start the server in a new terminal, starting from the project root:
 
 ```bash
 cd backend
@@ -102,9 +100,9 @@ If the `py` launcher is unavailable, use `python -m venv .venv` with an installe
 
 ### Terminal 3 — Accounts and teams (Neon, optional)
 
-As on macOS, create a project-root `.env` file based on `.env.example` and fill in your team's `DATABASE_URL` and `DJANGO_SECRET_KEY`, or set up your own database with the steps in the macOS section.
+As on macOS, the first time, follow [Set up Neon and GitHub](#set-up-neon-and-github), which creates a project-root `.env` file and starts this server. If your team shares a database, ask the teammate managing it for the `.env` values instead.
 
-In a new PowerShell terminal, starting from the project root:
+After that, start the server in a new PowerShell terminal, starting from the project root:
 
 ```powershell
 cd backend
@@ -203,63 +201,231 @@ A save sends the `base_revision` it started from. If another save happened first
 
 Opening a project returns Markdown, revision, and node positions from the same saved state. If GitHub cannot return the previous saved Markdown or commit the new content, Save returns `503` and preserves the project's revision, content reference, and node positions. Open returns `503` while GitHub is unavailable.
 
-### GitHub storage
+### Set up Neon and GitHub
 
-Set these values in the project-root `.env` file:
+This demo uses your own free Neon database and private GitHub repository, so you don't need any credentials from our team. Each project's Markdown is saved as `projects/<project_id>.md` in that repository, with one commit for each save that changes it.
 
-| Variable | Purpose |
+**This repository is public. Never commit `.env` or paste its values anywhere.**
+
+#### 1. Install the backend
+
+Skip this step if you already created `backend/.venv` in Terminal 2. Start in the project root.
+
+macOS:
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Windows PowerShell:
+
+```powershell
+cd backend
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+Keep this terminal open in `backend/` with the virtual environment active. The steps below use it.
+
+#### 2. Create a Neon database
+
+1. Sign in at <https://console.neon.tech/> and create a new project. Any name and region will do.
+
+2. Open **Connect**, turn off **Connection pooling**, and copy the connection string. You'll use it in step 4.
+
+#### 3. Create a private GitHub repository and token
+
+1. Create a **private** repository at <https://github.com/new> and select **Add a README file**, so the `main` branch exists.
+
+2. Under **Settings > Developer settings > Personal access tokens > Fine-grained tokens**, generate a new token. For repository access, choose only the repository you just created. For repository permissions, set **Contents** to **Read and write**.
+
+3. Copy the token. GitHub only shows it once.
+
+#### 4. Create `.env`
+
+Copy the example file to the project root. On Windows, use `Copy-Item ..\.env.example ..\.env`.
+
+```bash
+cp ../.env.example ../.env
+```
+
+Then fill in these values and leave the others as they are:
+
+| Variable | Value |
 | --- | --- |
-| `GITHUB_REPOSITORY` | Private repository for project Markdown, as `owner/name`. Optional. |
-| `GITHUB_TOKEN` | Fine-grained token for that repository. |
-| `GITHUB_BRANCH` | Branch that receives saves; defaults to `main`. |
+| `DJANGO_SECRET_KEY` | The output of `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| `DATABASE_URL` | The Neon connection string from step 2 |
+| `GITHUB_REPOSITORY` | Your repository from step 3, as `owner/name` |
+| `GITHUB_TOKEN` | The token from step 3 |
 
-Each project's Markdown is saved as `projects/<project_id>.md` in a private GitHub repository, with one commit for each save that changes it. To set it up:
+Without `GITHUB_REPOSITORY`, the API still runs, but it makes no GitHub commits and keeps saved Markdown in server memory. After a restart, opening or saving a project whose Markdown was cleared returns `503`. Project records and node positions stay in the database.
 
-1. Create a private repository on GitHub and select **Add a README file**, so the `main` branch exists.
-
-2. Under **Settings > Developer settings > Personal access tokens > Fine-grained tokens**, create a token for that repository only, with **Contents** set to **Read and write**.
-
-3. Put the repository's `owner/name` in `GITHUB_REPOSITORY` and the token in `GITHUB_TOKEN`.
-
-Without `GITHUB_REPOSITORY`, the server keeps saved Markdown in process memory instead, and restarting the server clears it.
-
-### Trying the API
-
-The database needs the `accounts`, `teams`, and `projects` migrations. Check with the team first, then run this from `backend/`:
+#### 5. Create the tables and an admin account
 
 ```bash
 python manage.py migrate --settings=config.settings_neon
+python manage.py createsuperuser --settings=config.settings_neon
 ```
 
-The `accounts` migration lowercases existing emails. If two accounts differ only by capitalization, it stops with an error that names them and changes nothing.
+Enter an email, display name, and password when asked. The email appears in the commit messages in your repository.
 
-With the server running on port 8001:
+On a database that already has accounts, the `accounts` migration lowercases existing emails. If two accounts differ only by capitalization, it stops with an error that names them and changes nothing.
 
-1. In the admin at <http://127.0.0.1:8001/admin/>, under **Teams > Teams**, add a team. Under **Teams > Team memberships**, add your account to that team. The team's ID is the number in its admin page URL.
+#### 6. Start the server
 
-2. While signed in to the admin, open <http://127.0.0.1:8001/api/v1/projects> and post `{"name": "Act 1 Dialogue", "team_id": 1}` with your team's ID. The response includes the new `project_id`. The page first shows `405` because the browser sends GET. Use the form at the bottom, with media type `application/json`, to send the request.
+```bash
+python manage.py runserver 127.0.0.1:8001 --settings=config.settings_neon
+```
 
-3. Open `http://127.0.0.1:8001/api/v1/projects/<project_id>/save` and send a PUT request with this body:
+Leave it running.
 
-   ```json
-   {
-     "markdown_source": "# Node_1\nHello!\n",
-     "layout_data": {"nodes": [{"id": "Node_1", "position": {"x": 120, "y": 300}}]},
-     "base_revision": 1
-   }
-   ```
+#### 7. Sign in and add a team
 
-4. Open `http://127.0.0.1:8001/api/v1/projects/<project_id>` to see the saved Markdown, position, and revision 2. Sending the same PUT request again returns `409`.
+1. Sign in at <http://127.0.0.1:8001/admin/> with the admin account from step 5.
 
-5. With GitHub configured, the repository has a commit that adds `projects/<project_id>.md`.
+   ![The Django admin sign-in page](docs/images/project-api/admin-login.png)
 
-Without GitHub configured, restarting the server clears saved Markdown, and opening or saving a project whose Markdown was cleared returns `503`. Project records and node positions stay in the database.
+2. Under **Teams > Teams**, add a team.
+
+3. Under **Teams > Team memberships**, add your account to that team.
+
+   ![Adding an account to a team in the Django admin](docs/images/project-api/admin-team-membership.png)
+
+In a new database, the first team's ID is `1`. Otherwise, the ID is the number in the team's admin page URL.
+
+### Run the demo
+
+Use the same browser you signed in with. The API pages first show `405` because the browser sends GET, and that's expected. To send a request, use the form at the bottom of the page with **Media type** set to `application/json`.
+
+#### 1. Create a project
+
+Open <http://127.0.0.1:8001/api/v1/projects>, paste this into the form, and click **POST**:
+
+```json
+{
+  "name": "Sprint 3 Demo",
+  "team_id": 1
+}
+```
+
+![The API page showing 405, with the request filled in the form at the bottom](docs/images/project-api/api-create-form.png)
+
+**Expected:** `201 Created`, with a new `project_id`, an empty `markdown_source`, and `revision: 1`. Copy the `project_id` and use it in place of `<project_id>` below.
+
+![The API response showing 201 Created and the new project_id](docs/images/project-api/api-create-result.png)
+
+#### 2. Check the project in Neon
+
+In the Neon console, open **SQL Editor** and run:
+
+```sql
+select p.name, p.revision, p.head_commit_sha, n.node_id, n.x, n.y
+from projects_project p
+left join projects_nodeposition n on n.project_id = p.id
+order by p.created_at desc
+limit 1;
+```
+
+**Expected:** `Sprint 3 Demo` at `revision` 1, with `head_commit_sha`, `node_id`, `x`, and `y` empty.
+
+![The Neon SQL Editor showing one row for Sprint 3 Demo at revision 1](docs/images/project-api/neon-sql-result.png)
+
+#### 3. Save the project
+
+Open `http://127.0.0.1:8001/api/v1/projects/<project_id>/save`, paste this into the form, and click **PUT**:
+
+```json
+{
+  "markdown_source": "# Node_1\nHello from Team 6!\n",
+  "layout_data": {
+    "nodes": [
+      {
+        "id": "Node_1",
+        "position": {"x": 120, "y": 300}
+      }
+    ]
+  },
+  "base_revision": 1
+}
+```
+
+**Expected:** `200 OK`, with `status: "saved"` and `revision: 2`.
+
+#### 4. See the commit on GitHub
+
+Open your repository's commit list.
+
+**Expected:** The newest commit is `Save Sprint 3 Demo (<project_id>) revision 2 by <your email>`, and it adds `projects/<project_id>.md`.
+
+#### 5. Check Neon again
+
+Run the same query in **SQL Editor**.
+
+**Expected:** `revision` 2, a `head_commit_sha` that matches the GitHub commit, and `Node_1`, `120`, `300`.
+
+#### 6. Open the project
+
+Open `http://127.0.0.1:8001/api/v1/projects/<project_id>`.
+
+**Expected:** `200 OK`, with `Hello from Team 6!` in `markdown_source`, position `120.0`, `300.0`, and `revision: 2`.
+
+#### 7. Try an outdated save
+
+Open the save page from step 3 again, paste this into the form, and click **PUT**:
+
+```json
+{
+  "markdown_source": "# Node_1\nThis change should be rejected.\n",
+  "layout_data": {
+    "nodes": [
+      {
+        "id": "Node_1",
+        "position": {"x": 120, "y": 300}
+      }
+    ]
+  },
+  "base_revision": 1
+}
+```
+
+**Expected:** `409 Conflict`, with `revision: 2`. Run the query in **SQL Editor** again, and `revision` and `head_commit_sha` are unchanged.
+
+#### 8. Restart the server and open the project again
+
+Press `Ctrl+C` in the server terminal, run the command from step 6 of the setup again, and reload the page from step 6 above.
+
+**Expected:** The same Markdown and `revision: 2`. You stay signed in.
+
+#### 9. Run the tests
+
+In a new terminal, activate the virtual environment from `backend/` and run:
+
+```bash
+python manage.py test accounts teams config projects --settings=config.settings_auth_test
+```
+
+**Expected:** `Ran 42 tests` and `OK`. These tests use a temporary SQLite database, not Neon or GitHub.
+
+### If something goes wrong
+
+| What you see | What to do |
+| --- | --- |
+| `Set the DJANGO_SECRET_KEY` | Create `.env` in the project root, not in `backend/`. See step 4 of the setup. |
+| `401` | Sign in at <http://127.0.0.1:8001/admin/> in the same browser. |
+| `403` and `You are not a member of this team.` | Check `team_id`, and add your account under **Teams > Team memberships**. |
+| `405` | This is expected when you first open an API page. Use the form at the bottom. |
+| `409` | `base_revision` is out of date. Use the latest `revision` from the API. |
+| `503` | Check `GITHUB_REPOSITORY` and `GITHUB_TOKEN`. Without GitHub configured, this also happens after a restart. |
 
 ## Demo data
 
 - **Editor:** a new browser session opens with the sample in `fixtures/merchant.md`.
 
-- **Project API:** add one team and one membership in the admin, as in step 1 of [Trying the API](#trying-the-api). There is no seed command.
+- **Project API:** add one team and one membership in the admin, as in step 7 of [Set up Neon and GitHub](#set-up-neon-and-github). There is no seed command.
 
 ## Tests
 
