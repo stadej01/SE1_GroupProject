@@ -35,7 +35,8 @@ h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .panel-divider:hover, .panel-divider:focus-visible, .is-resizing-panels .panel-divider { background: #245c9a; box-shadow: 0 0 0 1px #245c9a; }
 .is-resizing-panels, .is-resizing-panels * { cursor: col-resize !important; user-select: none !important; }
 
-.source-editor { display: flex; height: max(470px, calc(100vh - var(--app-header-height) - var(--panel-header-height) - var(--panel-footer-height))); min-height: 0; background: #fcfdff; }
+.source-editor { position: relative; overflow: hidden; display: flex; height: max(470px, calc(100vh - var(--app-header-height) - var(--panel-header-height) - var(--panel-footer-height))); min-height: 0; background: #fcfdff; }
+.source-line-mark { position: absolute; left: 0; right: 0; background: #cde1fb; mix-blend-mode: multiply; pointer-events: none; }
 .line-numbers { margin: 0; min-width: 47px; padding: 18px 10px 18px 5px; text-align: right; user-select: none; color: #9aa6b4; background: #f6f8fb; border-right: 1px solid #edf0f4; overflow: hidden; }
 .line-numbers, textarea { font: 12px/23px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; tab-size: 4; }
 textarea { display: block; width: 100%; min-width: 0; height: 100%; resize: none; padding: 18px 16px; border: 0; margin: 0; color: #30485f; background: transparent; white-space: pre; }

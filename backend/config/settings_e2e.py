@@ -13,6 +13,7 @@ DATABASES = {
         "NAME": os.environ["DJANGO_DATABASE_PATH"],
     }
 }
+CONTENT_STORE = "memory"
 GITHUB_REPOSITORY = ""
 # Simple passwords are allowed only in this isolated local environment.
 AUTH_PASSWORD_VALIDATORS = []

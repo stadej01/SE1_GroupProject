@@ -67,7 +67,7 @@ class ProjectPageTests(TestCase):
         self.assertRedirects(response, self.project_url(project))
         self.assertEqual(project.revision, 1)
         self.assertEqual(project.head_commit_sha, "")
-        self.assertEqual(project.github_path, f"projects/{project.pk}.md")
+        self.assertEqual(project.github_path, f"teams/{self.team.pk}/projects/{project.pk}.md")
         self.assertFalse(NodePosition.objects.exists())
         store.assert_not_called()
 

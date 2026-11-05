@@ -177,6 +177,54 @@ test("Connections adds and deletes a link, and only one toolbar panel stays open
   await expect(page.locator("#connection-from")).toBeHidden();
 });
 
+test("selecting a node or connection marks its Markdown, and key presses leave the text alone", async ({ page }) => {
+  await register(page);
+  await createProject(page);
+  await parse(page);
+  await save(page);
+  const source = page.locator("#markdown-source");
+  const mark = page.locator("#source-line-mark");
+  const pressKeys = async () => {
+    for (const key of ["x", "Space", "Enter", "Backspace", "Delete", "ArrowRight"]) await page.keyboard.press(key);
+  };
+  const expectTextUntouched = async () => {
+    await expect(source).toHaveValue(markdown);
+    await expect(source).not.toBeFocused();
+    await expect(page.locator("#save-status")).not.toHaveText("Unsaved changes");
+    await expect(page.locator(".react-flow__node")).toHaveCount(2);
+  };
+
+  const before = await positions(page);
+  await page.locator('.react-flow__node[data-id="Node_Greeting"]').click();
+  await expect(page.locator("#source-selection")).toHaveText("Lines 2–6 · Node_Greeting");
+  const area = (await source.boundingBox())!;
+  const marked = (await mark.boundingBox())!;
+  expect(marked.y - area.y).toBe(18 + 23);
+  expect(marked.height).toBe(5 * 23);
+  await pressKeys();
+  await expectTextUntouched();
+  await expect(mark).toBeVisible();
+  expect(await positions(page)).toEqual(before);
+
+  await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+  await expect(mark).toBeHidden();
+
+  const edge = (await page.locator(".react-flow__edge-interaction").first().boundingBox())!;
+  await page.mouse.click(edge.x + edge.width / 2, edge.y + edge.height / 2);
+  await expect(page.locator("#parse-status")).toContainText("Selected connection");
+  await expect(mark).toBeVisible();
+  await pressKeys();
+  await expectTextUntouched();
+
+  await source.click();
+  await expect(mark).toBeHidden();
+  await page.keyboard.press("ControlOrMeta+End");
+  await page.keyboard.type("Z");
+  await expect(source).toHaveValue(markdown + "Z");
+  await expect(page.locator("#parse-status")).toHaveText("Edited — parse again");
+  await expect(page.locator("#save-status")).toHaveText("Unsaved changes");
+});
+
 test("the node details close on an empty click or ×, but keep unapplied changes open", async ({ page }) => {
   await register(page);
   await createProject(page);

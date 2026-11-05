@@ -12,7 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 env = environ.Env()
 environ.Env.read_env(BASE_DIR.parent / ".env")
 
-SECRET_KEY = env("DJANGO_SECRET_KEY")
+# Missing values are reported together by projects.checks when the app starts.
+SECRET_KEY = env("DJANGO_SECRET_KEY", default="")
 DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
 ALLOWED_HOSTS = env.list(
@@ -83,12 +84,18 @@ WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
 # Neon is only used by this settings configuration.
+_database_url = env("DATABASE_URL", default="")
 DATABASES = {
-    "default": env.db("DATABASE_URL"),
+    "default": (
+        env.db_url_config(_database_url)
+        if _database_url
+        else {"ENGINE": "django.db.backends.dummy"}
+    ),
 }
 
 # Each project's Markdown is a file in a private GitHub repository (owner/name).
-# Without a repository, saved Markdown stays in server memory.
+# Only test settings may replace it with memory storage.
+CONTENT_STORE = "github"
 GITHUB_REPOSITORY = env("GITHUB_REPOSITORY", default="")
 GITHUB_TOKEN = env("GITHUB_TOKEN", default="")
 GITHUB_BRANCH = env("GITHUB_BRANCH", default="main")
