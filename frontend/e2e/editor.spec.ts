@@ -36,6 +36,7 @@ test("invalid Markdown saves and reloads but cannot produce a graph", async ({ p
   const selected = await page.locator("#markdown-source").evaluate((textarea: HTMLTextAreaElement) =>
     textarea.value.slice(textarea.selectionStart, textarea.selectionEnd));
   expect(selected).toBe("??? unsupported syntax");
+  await expect(page.locator("#markdown-source")).toBeFocused();
   await page.reload();
   await expect(page.locator("#markdown-source")).toHaveValue(invalid);
   await expect(page.locator(".react-flow__node")).toHaveCount(0);

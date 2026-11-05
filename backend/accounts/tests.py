@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.test import TestCase, TransactionTestCase
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.hashers import make_password
@@ -6,7 +8,93 @@ from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
 from django.urls import reverse
 
+from teams.models import Team, TeamMembership
+
 # Create your tests here.
+
+
+class AccountPageTests(TestCase):
+    PASSWORD = "river-window-sunset-947"
+
+    def registration_data(self, **changes):
+        return {
+            "email": "Writer@Example.COM",
+            "display_name": "Writer",
+            "password1": self.PASSWORD,
+            "password2": self.PASSWORD,
+            **changes,
+        }
+
+    def create_user(self):
+        return get_user_model().objects.create_user(
+            email="writer@example.com", display_name="Writer", password=self.PASSWORD
+        )
+
+    def test_registration_normalizes_email_creates_workspace_and_logs_in(self):
+        response = self.client.post(reverse("accounts:register"), self.registration_data())
+        self.assertRedirects(response, "/")
+        user = get_user_model().objects.get()
+        self.assertEqual(user.email, "writer@example.com")
+        self.assertTrue(user.check_password(self.PASSWORD))
+        self.assertEqual(Team.objects.get().name, "Writer's team")
+        self.assertEqual(TeamMembership.objects.get().user, user)
+        self.assertEqual(str(user.pk), self.client.session["_auth_user_id"])
+
+    def test_duplicate_email_is_rejected_without_new_workspace(self):
+        self.create_user()
+        response = self.client.post(reverse("accounts:register"), self.registration_data())
+        self.assertFormError(response.context["form"], "email", "User with this Email already exists.")
+        self.assertEqual(get_user_model().objects.count(), 1)
+        self.assertFalse(Team.objects.exists())
+        self.assertFalse(TeamMembership.objects.exists())
+
+    def test_weak_password_is_rejected(self):
+        response = self.client.post(reverse("accounts:register"), self.registration_data(
+            password1="123", password2="123"
+        ))
+        self.assertTrue(response.context["form"].errors["password2"])
+        self.assertFalse(get_user_model().objects.exists())
+        self.assertFalse(Team.objects.exists())
+
+    def test_registration_rolls_back_user_and_team_if_membership_fails(self):
+        with patch("accounts.views.TeamMembership.objects.create", side_effect=IntegrityError):
+            with self.assertRaises(IntegrityError):
+                self.client.post(reverse("accounts:register"), self.registration_data())
+        self.assertFalse(get_user_model().objects.exists())
+        self.assertFalse(Team.objects.exists())
+
+    def test_login_returns_to_next(self):
+        self.create_user()
+        response = self.client.post(reverse("accounts:login"), {
+            "username": "WRITER@example.COM", "password": self.PASSWORD,
+            "next": "/?from=login",
+        })
+        self.assertRedirects(response, "/?from=login")
+
+    def test_login_defaults_to_home_and_rejects_external_next(self):
+        self.create_user()
+        for next_url in ("", "https://outside.example/"):
+            with self.subTest(next_url=next_url):
+                self.client.logout()
+                response = self.client.post(reverse("accounts:login"), {
+                    "username": "writer@example.com", "password": self.PASSWORD,
+                    "next": next_url,
+                })
+                self.assertRedirects(response, "/")
+
+    def test_logged_in_login_page_goes_home_even_with_next(self):
+        self.client.force_login(self.create_user())
+        self.assertRedirects(self.client.get(reverse("accounts:login"), {"next": "/admin/"}), "/")
+
+    def test_logout_requires_post_and_clears_session(self):
+        self.client.force_login(self.create_user())
+        for method in ("get", "head", "options", "put", "delete"):
+            with self.subTest(method=method):
+                self.assertEqual(getattr(self.client, method)(reverse("accounts:logout")).status_code, 405)
+        self.assertIn("_auth_user_id", self.client.session)
+        self.assertRedirects(self.client.post(reverse("accounts:logout")), reverse("accounts:login"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertRedirects(self.client.get("/"), "/accounts/login/?next=/")
 
 
 class UserTests(TestCase):

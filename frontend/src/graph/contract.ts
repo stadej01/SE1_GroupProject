@@ -23,6 +23,8 @@ export interface GraphEdge {
   label: string | null;
   condition: string | null;
   source_line: number;
+  /** True for a jump at the end of its node; may be absent on a new graph edge. */
+  ends_node?: boolean;
 }
 
 export interface Diagnostic {

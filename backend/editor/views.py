@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
 from uuid import uuid4
+from django.conf import settings
 from django.core.exceptions import RequestDataTooBig
 from django.http import JsonResponse
 from django.shortcuts import render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -49,7 +51,8 @@ def index(request):
     draft, _ = Draft.objects.get_or_create(owner_key=owner_key,
         defaults={"markdown_source": DEMO_SOURCE.read_text(encoding="utf-8")})
     return render(request, "editor/index.html", {"markdown_source": draft.markdown_source,
-        "revision": draft.revision, "assets": frontend_assets()})
+        "revision": draft.revision, "assets": frontend_assets(), "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
+        "sync_url": reverse("editor:sync"), "save_url": reverse("editor:save")})
 
 @never_cache
 @require_POST
