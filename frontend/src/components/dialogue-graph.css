@@ -4,7 +4,7 @@
   background: #fff; border: 1px solid #d4d4d8; border-radius: 6px;
   display: flex; flex-direction: column; gap: 6px; overflow: visible;
 }
-.dlg-node__id { font-weight: 600; font-size: 13px; color: #1f2937; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlg-node__id { min-width: 0; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dlg-node__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .dlg-node__start { flex: none; color: #176345; background: #e2f4e9; border-radius: 4px; padding: 2px 5px; font-size: 9px; font-weight: 700; letter-spacing: .5px; }
 .dlg-node__preview { font-size: 12px; line-height: 19px; color: #4b5563;
@@ -15,8 +15,10 @@
 .dlg-edge-label { position: absolute; pointer-events: all; font-size: 11px; padding: 2px 6px;
   background: #fff; border: 1px solid #e5e7eb; border-radius: 4px; color: #374151; }
 .react-flow__edge-text { font-size: 11px; }
-.dlg-legend { position: absolute; top: 12px; right: 12px; display: grid; grid-template-columns: auto auto;
-  gap: 6px 8px; align-items: center; padding: 8px 10px; font-size: 12px;
-  background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; }
-.dlg-diagnostics { position: absolute; left: 12px; bottom: 12px; margin: 0; padding: 8px 12px 8px 28px;
-  max-width: 420px; font-size: 12px; color: #b23a48; background: #fff; border: 1px solid #f1c4c9; border-radius: 6px; }
+/* Sits above the React Flow attribution and clear of the zoom buttons on the left. */
+.dlg-legend { position: absolute; right: 12px; bottom: 24px; max-width: calc(100% - 76px); display: flex; flex-wrap: wrap;
+  justify-content: flex-end; gap: 4px 12px; padding: 5px 9px; font-size: 11px;
+  background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; pointer-events: none; }
+.dlg-legend__item { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.dlg-diagnostics { position: absolute; left: 12px; top: 12px; margin: 0; padding: 8px 12px 8px 28px;
+  max-width: min(420px, calc(100% - 24px)); font-size: 12px; color: #b23a48; background: #fff; border: 1px solid #f1c4c9; border-radius: 6px; }

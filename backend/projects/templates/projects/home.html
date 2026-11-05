@@ -1,0 +1,35 @@
+{% extends "accounts/base.html" %}
+{% block title %}Your projects · Dialogue editor{% endblock %}
+{% block content %}
+<h1>Your projects</h1>
+{% if teams %}
+<div class="home-grid">
+  <div class="panel">
+    {% for team in teams %}
+    <section class="team" aria-labelledby="team-{{ team.pk }}">
+      <h2 id="team-{{ team.pk }}">{{ team.name }}</h2>
+      <ul class="projects">
+        {% for project in team.projects.all %}
+        <li><a href="{% url 'pages:project' project.pk %}">{{ project.name }}</a></li>
+        {% empty %}
+        <li class="muted">No projects yet. Create one to start writing.</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endfor %}
+  </div>
+  <section class="panel" aria-labelledby="new-project-heading">
+    <h2 id="new-project-heading">New project</h2>
+    <form method="post" action="{% url 'pages:create' %}">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button class="primary" type="submit">Create project</button>
+    </form>
+  </section>
+</div>
+{% else %}
+<div class="panel">
+  <p>You do not belong to a team yet. Ask an administrator to add you to a team in <a href="{% url 'admin:index' %}">Django admin</a>.</p>
+</div>
+{% endif %}
+{% endblock %}
