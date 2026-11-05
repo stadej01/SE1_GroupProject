@@ -17,13 +17,15 @@ function Invoke-Checked([scriptblock]$Step) {
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
-  Stop-Setup 'Python 3.12 is required. See "Before you start" in README.md.'
-}
+$pythonRequired = 'Python 3.12 is required. See "Before you start" in README.md.'
+if (-not (Get-Command py -ErrorAction SilentlyContinue)) { Stop-Setup $pythonRequired }
+py -3.12 -c "pass"
+if ($LASTEXITCODE -ne 0) { Stop-Setup $pythonRequired }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   Stop-Setup 'Node.js 22.12 or newer, with npm, is required. See "Before you start" in README.md.'
 }
-node -e 'const [a, b] = process.versions.node.split(\".\").map(Number); process.exit(a > 22 || (a === 22 && b >= 12) ? 0 : 1)'
+# No double quotes inside: PowerShell 5.1 and 7 pass them to node differently.
+node -e "const [a, b] = process.versions.node.split('.').map(Number); process.exit(a > 22 || (a === 22 && b >= 12) ? 0 : 1)"
 if ($LASTEXITCODE -ne 0) {
   Stop-Setup "Node.js 22.12 or newer is required. This machine has $(node --version)."
 }
