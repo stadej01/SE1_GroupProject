@@ -1,9 +1,6 @@
 
 """
-Django settings for the accounts, teams, and projects demo.
-
-Uses Neon PostgreSQL and is kept separate from the
-dialogue editor until the next sprint.
+Django settings for the shared accounts, projects, and editor service.
 """
 
 from pathlib import Path
@@ -34,9 +31,17 @@ INSTALLED_APPS = [
     "accounts.apps.AccountsConfig",
     "teams.apps.TeamsConfig",
     "projects.apps.ProjectsConfig",
+    "editor",
 ]
 
+# Draft belongs to the old SQLite demo, not the shared project database.
+MIGRATION_MODULES = {"editor": None}
+
 AUTH_USER_MODEL = "accounts.User"
+LOGIN_URL = "accounts:login"
+LOGIN_REDIRECT_URL = "/"
+LOGOUT_REDIRECT_URL = "accounts:login"
+CSRF_FAILURE_VIEW = "config.views.csrf_failure"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

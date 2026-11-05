@@ -6,7 +6,7 @@
     "dev": "vite build --watch",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test src/graph/*.test.ts src/editor/*.test.ts",
+    "test": "node --import tsx --test src/graph/*.test.ts src/editor/*.test.ts src/project/*.test.ts",
     "test:e2e": "playwright test",
     "fixture": "node scripts/update-fixture.mjs"
   },
