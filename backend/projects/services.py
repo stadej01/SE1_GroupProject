@@ -1,5 +1,7 @@
 """Project Services: open and save projects."""
 
+import unicodedata
+
 from django.db import transaction
 
 from .models import NodePosition, Project
@@ -27,6 +29,35 @@ def read_project_snapshot(project):
     return project, positions
 
 
+def _single_line(text):
+    """Line breaks and control characters become spaces, for commit text only."""
+    spaced = "".join(
+        " " if unicodedata.category(character) in ("Cc", "Zl", "Zp") else character
+        for character in text
+    )
+    return " ".join(spaced.split())
+
+
+def _saver_name(user):
+    """The display name as Git accepts it; a name Git would empty falls back."""
+    name = _single_line(user.display_name).replace("<", "").replace(">", "").strip()
+    return name if name.strip(".,:;'\"\\ ") else f"user-{user.pk}"
+
+
+def commit_message(project, user):
+    action = "update" if project.head_commit_sha else "create"
+    name = _single_line(project.name).replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        f'docs(dialogue): {action} "{name}" '
+        f"r{project.revision + 1} by {_saver_name(user)}"
+    )
+
+
+def commit_author(user):
+    """Who saved the content. The address is an identifier and receives no mail."""
+    return {"name": _saver_name(user), "email": f"user-{user.pk}@dialogue.invalid"}
+
+
 def save_project(project, user, markdown, nodes, base_revision, store):
     """Save Markdown and node positions as the project's next revision.
 
@@ -41,12 +72,11 @@ def save_project(project, user, markdown, nodes, base_revision, store):
 
         changed = markdown != read_markdown(project, store)
         if changed:
-            message = (
-                f"Save {project.name} ({project.pk}) "
-                f"revision {project.revision + 1} by {user.email}"
-            )
             project.head_commit_sha = store.write(
-                project.github_path, markdown, message
+                project.github_path,
+                markdown,
+                commit_message(project, user),
+                author=commit_author(user),
             )
 
         for node in nodes:

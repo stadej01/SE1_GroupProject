@@ -34,6 +34,12 @@ const saveStatus = element("save-status");
 const graphCount = element("graph-count");
 const lineNumbers = element("line-numbers");
 const selection = element("source-selection");
+const lineMark = document.createElement("div");
+lineMark.id = "source-line-mark";
+lineMark.className = "source-line-mark";
+lineMark.hidden = true;
+source.parentElement!.append(lineMark);
+let markedLines: { first: number; last: number } | null = null;
 const diagnosticPanel = element("diagnostics-panel");
 const diagnosticList = element("diagnostics");
 const getCsrfToken = () => readCsrfToken(document.cookie, app.dataset.csrfCookie!);
@@ -101,7 +107,8 @@ function selectEdge(edge: GraphEdge) {
   const selector = toolbar.querySelector<HTMLSelectElement>("#connection-delete");
   if (selector) selector.value = edge.id;
   parseStatus.textContent = `Selected connection: ${edge.source} → ${edge.target}. Open Connections to delete it.`;
-  if (!pendingMarkdown && graphSource === source.value && edge.source_line > 0) selectLines(edge.source_line);
+  if (!pendingMarkdown && graphSource === source.value && edge.source_line > 0) markLines(edge.source_line);
+  else clearLineMark();
 }
 function deleteConnection() {
   if (!editingGraph || graphSource !== source.value) { window.alert("Parse valid Markdown before editing connections."); return; }
@@ -129,16 +136,45 @@ function updateLines() {
   lineNumbers.textContent = Array.from({ length: count }, (_, i) => i + 1).join("\n");
   element("line-count").textContent = `${count} lines`;
   lineNumbers.scrollTop = source.scrollTop;
+  clearLineMark();
 }
 
 function selectLines(first: number, last = first, label?: string) {
   const range = sourceRange(source.value, first, last);
-  source.focus();
   source.setSelectionRange(range.start, range.end);
   const lineHeight = parseFloat(getComputedStyle(source).lineHeight);
   source.scrollTop = Math.max(0, (first - 3) * lineHeight);
   lineNumbers.scrollTop = source.scrollTop;
   selection.textContent = `Lines ${first}–${last}${label ? ` · ${label}` : ""}`;
+}
+
+// An error's line takes the user into the Markdown box to fix it.
+function jumpToLine(line: number) {
+  source.focus();
+  selectLines(line);
+}
+
+// A graph selection only marks its lines. Focus stays out of the Markdown box,
+// or the next key press would replace them and become a saved edit.
+function markLines(first: number, last = first, label?: string) {
+  selectLines(first, last, label);
+  (document.activeElement as HTMLElement | null)?.blur();
+  markedLines = { first, last };
+  positionLineMark();
+}
+
+function positionLineMark() {
+  lineMark.hidden = markedLines === null;
+  if (!markedLines) return;
+  const style = getComputedStyle(source);
+  const lineHeight = parseFloat(style.lineHeight);
+  lineMark.style.top = `${parseFloat(style.paddingTop) + (markedLines.first - 1) * lineHeight - source.scrollTop}px`;
+  lineMark.style.height = `${(markedLines.last - markedLines.first + 1) * lineHeight}px`;
+}
+
+function clearLineMark() {
+  markedLines = null;
+  lineMark.hidden = true;
 }
 
 function selectNode(node: GraphNode) {
@@ -147,7 +183,8 @@ function selectNode(node: GraphNode) {
   if (warnAboutUnappliedEdits()) return;
   selectedNode = node;
   selectedNodeId = node.id;
-  if (node.source_line > 0 && !pendingMarkdown) selectLines(node.source_line, node.source_end_line, node.id);
+  if (node.source_line > 0 && !pendingMarkdown) markLines(node.source_line, node.source_end_line, node.id);
+  else clearLineMark();
   showNodeEditor(node);
 }
 
@@ -167,7 +204,7 @@ function showDiagnostics(diagnostics: Diagnostic[]) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = text;
-      button.addEventListener("click", () => selectLines(diagnostic.line!));
+      button.addEventListener("click", () => jumpToLine(diagnostic.line!));
       li.append(button);
     } else li.textContent = text;
     diagnosticList.append(li);
@@ -281,7 +318,8 @@ source.addEventListener("input", () => {
   updateSaveStatus();
   updateLines();
 });
-source.addEventListener("scroll", () => { lineNumbers.scrollTop = source.scrollTop; });
+source.addEventListener("scroll", () => { lineNumbers.scrollTop = source.scrollTop; positionLineMark(); });
+source.addEventListener("focus", clearLineMark);
 parseButton.addEventListener("click", () => { void parse(); });
 saveButton.addEventListener("click", () => { void save(); });
 const backLink = document.querySelector<HTMLAnchorElement>("#back-to-projects");
@@ -320,7 +358,7 @@ function fieldInput(name: string, value: string) {
   const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "×"; remove.setAttribute("aria-label", "Remove field"); remove.addEventListener("click", () => row.remove());
   row.append(key, val, remove); extras.append(row);
 }
-function closeNodeEditor() { nodePanel.hidden = true; renderGraph(); }
+function closeNodeEditor() { nodePanel.hidden = true; clearLineMark(); renderGraph(); }
 // Clicks on the graph must not lose text the user has not applied yet.
 function warnAboutUnappliedEdits() {
   if (nodePanel.hidden || formValues() === appliedFormValues) return false;
