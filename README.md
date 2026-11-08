@@ -413,7 +413,7 @@ In a new terminal, activate the virtual environment from `backend/` and run:
 python manage.py test accounts teams config projects --settings=config.settings_auth_test
 ```
 
-**Expected:** `Ran 63 tests` and `OK`. These tests use a temporary SQLite database, not Neon or GitHub.
+**Expected:** `Ran 64 tests` and `OK`. These tests use a temporary SQLite database, not Neon or GitHub.
 
 ### Sign in with a token
 

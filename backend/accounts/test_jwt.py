@@ -119,6 +119,13 @@ class BearerAuthenticationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(Project.objects.exists())
 
+    def test_admin_session_login_still_works(self):
+        self.client.force_login(self.member)
+
+        response = self.post_project()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
 
 class TeamProjectRequestTests(APITestCase):
     def setUp(self):
