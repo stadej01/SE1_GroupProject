@@ -31,9 +31,10 @@ class LoginTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         body = response.json()
         self.assertEqual(user_from_token(body["token"]), self.user)
-        self.assertEqual(body["user_id"], self.user.pk)
-        self.assertEqual(body["name"], "Designer")
-        self.assertEqual(body["email"], "designer@example.com")
+        self.assertEqual(
+            body["user"],
+            {"id": self.user.pk, "name": "Designer", "email": "designer@example.com"},
+        )
 
     def test_email_capitalization_does_not_matter(self):
         response = self.login(email="DESIGNER@Example.com", password=PASSWORD)

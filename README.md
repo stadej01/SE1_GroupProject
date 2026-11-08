@@ -436,14 +436,12 @@ $login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/auth/l
 $login | ConvertTo-Json -Depth 5
 ```
 
-**Expected:** `200 OK` with a `token`, `user_id`, `name`, `email`, and `teams`. Capitalization in the email doesn't matter.
+**Expected:** `200 OK` with a `token`, a `user` (its `id`, `name`, and `email`), and `teams`. Capitalization in the email doesn't matter.
 
 ```json
 {
   "token": "<token>",
-  "user_id": 1,
-  "name": "Designer",
-  "email": "designer@example.com",
+  "user": {"id": 1, "name": "Designer", "email": "designer@example.com"},
   "teams": [
     {
       "team_id": 1,
@@ -609,8 +607,8 @@ The Markdown parser is still a regex-based prototype, not the planned Lark imple
 
 The dialogue editor does not yet use login, team membership permissions, or a Neon project model. Draft ownership is based on a browser session and stored locally in SQLite. Node positions are not permanently saved, and cross-file links are not implemented yet. JSON graph data exists, but a separate JSON download/export feature is still planned.
 
-The accounts demo uses Django admin, not a custom user-facing login page. Integration with the editor is planned for a future sprint.
+The accounts demo uses Django admin, not a custom user-facing login page. Signing in is an API endpoint with no login page yet, so the teams dashboard is returned in the login response and not displayed. Integration with the editor is planned for a future sprint.
 
-The project API saves Markdown and node positions, but the editor does not call it yet, so the editor's drafts and node positions stay as described above. The API uses the Django admin session for login, because the login endpoint is not built yet. Save does not run the parser yet, so `diagnostics` is always empty and positions of deleted nodes are kept. Repository writes run one at a time within one server process.
+The project API saves Markdown and node positions, but the editor does not call it yet, so the editor's drafts and node positions stay as described above. The API accepts a sign-in token from `POST /api/v1/auth/login` or the Django admin session. The admin session is kept so the earlier demo steps still work. Save does not run the parser yet, so `diagnostics` is always empty and positions of deleted nodes are kept. Repository writes run one at a time within one server process.
 
 This setup is for local development and demos, not public deployment.

@@ -54,9 +54,11 @@ class LoginView(APIView):
         return Response(
             {
                 "token": create_token(user),
-                "user_id": user.pk,
-                "name": user.display_name,
-                "email": user.email,
+                "user": {
+                    "id": user.pk,
+                    "name": user.display_name,
+                    "email": user.email,
+                },
                 "teams": teams_dashboard(user),
             }
         )
