@@ -118,3 +118,32 @@ class BearerAuthenticationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(Project.objects.exists())
+
+
+class TeamProjectRequestTests(APITestCase):
+    def setUp(self):
+        self.member = make_user()
+        self.team = Team.objects.create(name="Team 6")
+        TeamMembership.objects.create(team=self.team, user=self.member)
+        self.project = Project.objects.create(team=self.team, name="Act 1")
+
+    def open_project(self, authorization=None):
+        headers = {"HTTP_AUTHORIZATION": authorization} if authorization else {}
+        return self.client.get(
+            reverse("project-detail", args=[self.project.pk]), **headers
+        )
+
+    def test_signed_out_or_invalid_token_gets_401_and_no_project_data(self):
+        for header in (None, "Bearer not-a-token"):
+            with self.subTest(header=header):
+                response = self.open_project(header)
+
+                self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+                self.assertNotIn("markdown_source", response.json())
+
+    @override_settings(JWT_LIFETIME_SECONDS=-1)
+    def test_expired_token_gets_401_and_no_project_data(self):
+        response = self.open_project(f"Bearer {create_token(self.member)}")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertNotIn("markdown_source", response.json())
