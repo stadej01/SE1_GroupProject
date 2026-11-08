@@ -2,13 +2,13 @@
 
 from django import forms
 from django.conf import settings
-from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
+from accounts.token_cookie import token_login_required
 from editor.assets import frontend_assets
 from teams.models import Team
 
@@ -35,13 +35,13 @@ def home_response(request, form=None, status=200):
 
 
 @never_cache
-@login_required
+@token_login_required
 @require_GET
 def home(request):
     return home_response(request)
 
 
-@login_required
+@token_login_required
 @require_POST
 def create(request):
     teams = Team.objects.filter(memberships__user=request.user).order_by("pk")
@@ -53,7 +53,7 @@ def create(request):
 
 
 @never_cache
-@login_required
+@token_login_required
 @ensure_csrf_cookie
 @require_GET
 def project(request, project_id):

@@ -1,14 +1,13 @@
-"""Temporary account routes until US-31b replaces these pages."""
+"""Account pages. Signing in itself happens in `POST /api/v1/auth/login`."""
 
-from django.contrib.auth.views import LogoutView
 from django.urls import path
 
-from .views import TemporaryLoginView, register
+from .views import login_page, logout, register
 
 app_name = "accounts"
 
 urlpatterns = [
-    path("login/", TemporaryLoginView.as_view(), name="login"),
+    path("login/", login_page, name="login"),
     path("register/", register, name="register"),
-    path("logout/", LogoutView.as_view(http_method_names=["post"]), name="logout"),
+    path("logout/", logout, name="logout"),
 ]

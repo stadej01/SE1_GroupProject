@@ -40,15 +40,15 @@ MIGRATION_MODULES = {"editor": None}
 
 AUTH_USER_MODEL = "accounts.User"
 LOGIN_URL = "accounts:login"
-LOGIN_REDIRECT_URL = "/"
-LOGOUT_REDIRECT_URL = "accounts:login"
 CSRF_FAILURE_VIEW = "config.views.csrf_failure"
 
-JWT_LIFETIME_SECONDS = 60 * 60
+# Sign-in tokens last 8 hours. Browser pages keep them in an httpOnly cookie.
+JWT_LIFETIME_SECONDS = 8 * 60 * 60
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "accounts.authentication.JWTAuthentication",
+        "accounts.authentication.JWTCookieAuthentication",
         "accounts.authentication.SessionLoginAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
@@ -131,3 +131,4 @@ CSRF_COOKIE_SECURE = not DEBUG
 # Separate cookies for the two demos.
 SESSION_COOKIE_NAME = "se1_neon_sessionid"
 CSRF_COOKIE_NAME = "se1_neon_csrftoken"
+JWT_COOKIE_NAME = "se1_neon_token"

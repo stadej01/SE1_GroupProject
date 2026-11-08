@@ -24,7 +24,6 @@ import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
-from urllib.parse import urlencode
 
 BACKEND = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(BACKEND))
@@ -35,7 +34,7 @@ LOCK_TIMEOUT_SECONDS = 15
 
 
 class Backend:
-    """One logged-in browser session against one backend process."""
+    """One signed-in browser against one backend process."""
 
     def __init__(self, port, email):
         self.base = f"http://127.0.0.1:{port}"
@@ -43,15 +42,14 @@ class Backend:
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.cookies)
         )
+        # Like the login page: get the CSRF cookie, then sign in with the token,
+        # so the login API also sets the sign-in cookie.
         self.opener.open(f"{self.base}/accounts/login/", timeout=30).read()
-        form = urlencode(
-            {
-                "username": email,
-                "password": PASSWORD,
-                "csrfmiddlewaretoken": self.csrf(),
-            }
-        ).encode()
-        self.opener.open(f"{self.base}/accounts/login/", form, timeout=30).read()
+        status, body = self.call(
+            "POST", "/api/v1/auth/login", {"email": email, "password": PASSWORD}
+        )
+        signed_in = any(c.name == "se1_neon_token" for c in self.cookies)
+        assert status == 200 and signed_in, (status, body)
 
     def csrf(self):
         return next(c.value for c in self.cookies if c.name == "se1_neon_csrftoken")

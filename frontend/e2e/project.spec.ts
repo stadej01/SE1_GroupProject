@@ -546,7 +546,12 @@ test("returns to the requested project after login and hides it from another acc
     await visitor.goto(project.url);
     await expect(visitor).toHaveURL(/\/login\/\?next=/);
     expect(new URL(visitor.url()).searchParams.get("next")).toBe(new URL(project.url).pathname);
-    await visitor.locator("#id_username").fill(account.email);
+    await visitor.getByRole("button", { name: "Log in", exact: true }).click();
+    await expect(visitor.locator("#email-error")).toHaveText("This field may not be blank.");
+    await visitor.getByLabel("Email:", { exact: true }).fill(account.email);
+    await visitor.getByLabel("Password:", { exact: true }).fill("not-the-password");
+    await visitor.getByRole("button", { name: "Log in", exact: true }).click();
+    await expect(visitor.getByRole("alert")).toHaveText("Invalid email or password.");
     await visitor.getByLabel("Password:", { exact: true }).fill(account.password);
     await visitor.getByRole("button", { name: "Log in", exact: true }).click();
     await expect(visitor).toHaveURL(project.url);
@@ -562,6 +567,32 @@ test("returns to the requested project after login and hides it from another acc
   } finally {
     await guest.close();
   }
+});
+
+test("a save after the sign-in cookie is gone asks to sign in and keeps the text", async ({ page, context }) => {
+  const account = await register(page);
+  const { url } = await createProject(page);
+  await parse(page);
+  await save(page);
+  const edited = markdown.replace("Welcome, traveler.", "Typed after signing out.");
+  await page.locator("#markdown-source").fill(edited);
+  await context.clearCookies({ name: "se1_neon_token" });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.locator("#save-status")).toContainText("You are signed out. Your text is still here.");
+  await expect(page.locator("#markdown-source")).toHaveValue(edited);
+  expect(page.url()).toBe(url);
+
+  const opened = context.waitForEvent("page");
+  await page.getByRole("link", { name: "Sign in in a new tab", exact: true }).click();
+  const login = await opened;
+  await login.getByLabel("Email:", { exact: true }).fill(account.email);
+  await login.getByLabel("Password:", { exact: true }).fill(account.password);
+  await login.getByRole("button", { name: "Log in", exact: true }).click();
+  await expectHome(login);
+  await login.close();
+  await save(page);
+  await reopen(page, url);
+  await expect(page.locator("#markdown-source")).toHaveValue(edited);
 });
 
 test("warns on close after only dragging a node and stops warning after saving", async ({ page }) => {

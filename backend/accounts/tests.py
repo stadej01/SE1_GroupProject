@@ -1,14 +1,20 @@
 from unittest.mock import patch
 
-from django.test import TestCase, TransactionTestCase
+import jwt
+from django.conf import settings
+from django.test import TestCase, TransactionTestCase, override_settings
 from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.hashers import make_password
 from django.db import IntegrityError, connection, transaction
 from django.db.migrations.executor import MigrationExecutor
 from django.db.migrations.recorder import MigrationRecorder
 from django.urls import reverse
+from rest_framework.test import APIClient, APITestCase
 
+from projects.models import Project
 from teams.models import Team, TeamMembership
+
+from .tokens import create_token, user_from_token
 
 # Create your tests here.
 
@@ -30,6 +36,9 @@ class AccountPageTests(TestCase):
             email="writer@example.com", display_name="Writer", password=self.PASSWORD
         )
 
+    def sign_in(self, user):
+        self.client.cookies[settings.JWT_COOKIE_NAME] = create_token(user)
+
     def test_registration_normalizes_email_creates_workspace_and_logs_in(self):
         response = self.client.post(reverse("accounts:register"), self.registration_data())
         self.assertRedirects(response, "/")
@@ -38,7 +47,10 @@ class AccountPageTests(TestCase):
         self.assertTrue(user.check_password(self.PASSWORD))
         self.assertEqual(Team.objects.get().name, "Writer's team")
         self.assertEqual(TeamMembership.objects.get().user, user)
-        self.assertEqual(str(user.pk), self.client.session["_auth_user_id"])
+        cookie = response.cookies[settings.JWT_COOKIE_NAME]
+        self.assertEqual(user_from_token(cookie.value), user)
+        self.assertTrue(cookie["httponly"])
+        self.assertNotIn("_auth_user_id", self.client.session)
 
     def test_duplicate_email_is_rejected_without_new_workspace(self):
         self.create_user()
@@ -47,6 +59,7 @@ class AccountPageTests(TestCase):
         self.assertEqual(get_user_model().objects.count(), 1)
         self.assertFalse(Team.objects.exists())
         self.assertFalse(TeamMembership.objects.exists())
+        self.assertNotIn(settings.JWT_COOKIE_NAME, response.cookies)
 
     def test_weak_password_is_rejected(self):
         response = self.client.post(reverse("accounts:register"), self.registration_data(
@@ -63,38 +76,133 @@ class AccountPageTests(TestCase):
         self.assertFalse(get_user_model().objects.exists())
         self.assertFalse(Team.objects.exists())
 
-    def test_login_returns_to_next(self):
-        self.create_user()
-        response = self.client.post(reverse("accounts:login"), {
-            "username": "WRITER@example.COM", "password": self.PASSWORD,
-            "next": "/?from=login",
-        })
-        self.assertRedirects(response, "/?from=login")
+    def test_login_page_posts_to_the_login_api_and_keeps_a_local_next(self):
+        response = self.client.get(reverse("accounts:login"), {"next": "/?from=login"})
+        self.assertContains(response, f'action="{reverse("auth-login")}"')
+        self.assertContains(response, 'data-next="/?from=login"')
+        self.assertContains(response, f'data-csrf-cookie="{settings.CSRF_COOKIE_NAME}"')
+        self.assertIn(settings.CSRF_COOKIE_NAME, response.cookies)
 
-    def test_login_defaults_to_home_and_rejects_external_next(self):
-        self.create_user()
-        for next_url in ("", "https://outside.example/"):
+    def test_login_page_defaults_to_home_and_rejects_external_next(self):
+        for next_url in ("", "https://outside.example/", "//outside.example/"):
             with self.subTest(next_url=next_url):
-                self.client.logout()
-                response = self.client.post(reverse("accounts:login"), {
-                    "username": "writer@example.com", "password": self.PASSWORD,
-                    "next": next_url,
-                })
-                self.assertRedirects(response, "/")
+                response = self.client.get(reverse("accounts:login"), {"next": next_url})
+                self.assertEqual(response.context["next"], "/")
 
-    def test_logged_in_login_page_goes_home_even_with_next(self):
-        self.client.force_login(self.create_user())
+    def test_signed_in_login_and_register_pages_go_home_even_with_next(self):
+        self.sign_in(self.create_user())
         self.assertRedirects(self.client.get(reverse("accounts:login"), {"next": "/admin/"}), "/")
+        self.assertRedirects(self.client.get(reverse("accounts:register")), "/")
 
-    def test_logout_requires_post_and_clears_session(self):
+    def test_admin_session_alone_does_not_sign_in_to_the_pages(self):
         self.client.force_login(self.create_user())
+        self.assertRedirects(self.client.get("/"), "/accounts/login/?next=/")
+        self.assertNotContains(self.client.get(reverse("accounts:login")), "Log out")
+
+    def test_logout_requires_post_and_clears_the_token_cookie(self):
+        self.sign_in(self.create_user())
         for method in ("get", "head", "options", "put", "delete"):
             with self.subTest(method=method):
                 self.assertEqual(getattr(self.client, method)(reverse("accounts:logout")).status_code, 405)
-        self.assertIn("_auth_user_id", self.client.session)
-        self.assertRedirects(self.client.post(reverse("accounts:logout")), reverse("accounts:login"))
-        self.assertNotIn("_auth_user_id", self.client.session)
+        self.assertEqual(self.client.get("/").status_code, 200)
+        response = self.client.post(reverse("accounts:logout"))
+        self.assertRedirects(response, reverse("accounts:login"))
+        cookie = response.cookies[settings.JWT_COOKIE_NAME]
+        self.assertEqual(cookie.value, "")
+        self.assertEqual(cookie["max-age"], 0)
         self.assertRedirects(self.client.get("/"), "/accounts/login/?next=/")
+
+
+class TokenCookieTests(APITestCase):
+    PASSWORD = "river-window-sunset-947"
+
+    def setUp(self):
+        self.client = APIClient(enforce_csrf_checks=True)
+        self.user = get_user_model().objects.create_user(
+            email="writer@example.com", display_name="Writer", password=self.PASSWORD
+        )
+        self.team = Team.objects.create(name="Writing team")
+        TeamMembership.objects.create(team=self.team, user=self.user)
+
+    def log_in(self, csrf=True):
+        """Signs in like the login page does, or like a script without the CSRF token."""
+        headers = {}
+        if csrf:
+            self.client.get(reverse("accounts:login"))
+            headers["HTTP_X_CSRFTOKEN"] = self.client.cookies[settings.CSRF_COOKIE_NAME].value
+        return self.client.post(
+            reverse("auth-login"), {"email": self.user.email, "password": self.PASSWORD},
+            format="json", **headers,
+        )
+
+    def create_project(self, **headers):
+        return self.client.post(
+            reverse("project-create"), {"name": "Act 1", "team_id": self.team.pk}, format="json", **headers
+        )
+
+    def test_login_page_request_gets_an_httponly_lax_secure_cookie_with_the_returned_token(self):
+        response = self.log_in()
+        cookie = response.cookies[settings.JWT_COOKIE_NAME]
+        self.assertEqual(cookie.value, response.json()["token"])
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(cookie["samesite"], "Lax")
+        self.assertTrue(cookie["secure"])
+        self.assertEqual(cookie["max-age"], 8 * 60 * 60)
+
+    def test_login_without_the_csrf_token_returns_the_token_but_no_cookie(self):
+        # A script has no CSRF cookie; another site's form cannot send the token.
+        for case in ("script", "other_site"):
+            with self.subTest(case=case):
+                self.client.cookies.clear()
+                if case == "other_site":
+                    self.client.get(reverse("accounts:login"))
+                response = self.log_in(csrf=False)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(user_from_token(response.json()["token"]), self.user)
+                self.assertNotIn(settings.JWT_COOKIE_NAME, response.cookies)
+                self.assertNotIn(settings.JWT_COOKIE_NAME, self.client.cookies)
+
+    @override_settings(DEBUG=True)
+    def test_cookie_is_not_secure_while_debugging_over_http(self):
+        self.assertFalse(self.log_in().cookies[settings.JWT_COOKIE_NAME]["secure"])
+
+    def test_failed_login_sets_no_cookie(self):
+        response = self.client.post(
+            reverse("auth-login"), {"email": self.user.email, "password": "nope"}, format="json"
+        )
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn(settings.JWT_COOKIE_NAME, response.cookies)
+
+    def test_tokens_last_eight_hours(self):
+        payload = jwt.decode(create_token(self.user), settings.SECRET_KEY, algorithms=["HS256"])
+        self.assertEqual(payload["exp"] - payload["iat"], 8 * 60 * 60)
+
+    def test_cookie_reads_projects_and_writes_need_the_csrf_token(self):
+        project = Project.objects.create(team=self.team, name="Opened")
+        self.log_in()
+        self.assertEqual(self.client.get(reverse("project-detail", args=[project.pk])).status_code, 200)
+
+        refused = self.create_project()
+        self.assertEqual(refused.status_code, 403)
+        self.assertTrue(refused.json()["detail"].startswith("CSRF Failed"))
+        self.assertEqual(Project.objects.count(), 1)
+
+        csrf = self.client.cookies[settings.CSRF_COOKIE_NAME].value
+        self.assertEqual(self.create_project(HTTP_X_CSRFTOKEN=csrf).status_code, 201)
+
+    def test_bearer_requests_skip_the_csrf_check(self):
+        token = self.log_in(csrf=False).json()["token"]
+        self.assertEqual(self.create_project(HTTP_AUTHORIZATION=f"Bearer {token}").status_code, 201)
+
+    def test_missing_or_expired_cookie_gets_401(self):
+        project = Project.objects.create(team=self.team, name="Closed")
+        url = reverse("project-detail", args=[project.pk])
+        self.assertEqual(self.client.get(url).status_code, 401)
+        with override_settings(JWT_LIFETIME_SECONDS=-1):
+            self.client.cookies[settings.JWT_COOKIE_NAME] = create_token(self.user)
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 401)
+        self.assertNotIn("markdown_source", response.json())
 
 
 class UserTests(TestCase):

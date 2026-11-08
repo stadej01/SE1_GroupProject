@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from accounts.tokens import create_token
 from teams.models import Team, TeamMembership
 
 from .models import NodePosition, Project
@@ -33,7 +34,7 @@ class ProjectPageTests(TestCase):
         cls.other_project = Project.objects.create(team=cls.other_team, name="Secret project title")
 
     def setUp(self):
-        self.client.force_login(self.user)
+        self.client.cookies[settings.JWT_COOKIE_NAME] = create_token(self.user)
 
     def project_url(self, project=None):
         return reverse("pages:project", args=[(project or self.project).pk])
@@ -41,13 +42,21 @@ class ProjectPageTests(TestCase):
     def test_anonymous_home_and_project_redirect_and_login_returns_to_each(self):
         for url in ("/", self.project_url()):
             with self.subTest(url=url):
-                self.client.logout()
+                self.client.cookies.pop(settings.JWT_COOKIE_NAME)
                 response = self.client.get(url)
                 self.assertRedirects(response, f"/accounts/login/?next={url}")
-                response = self.client.post(response.url, {
-                    "username": self.user.email, "password": "member-river-window-947", "next": url,
-                })
-                self.assertRedirects(response, url)
+                self.assertEqual(self.client.get(response.url).context["next"], url)
+                response = self.client.post(reverse("auth-login"), {
+                    "email": self.user.email, "password": "member-river-window-947",
+                }, content_type="application/json")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(self.client.get(url).status_code, 200)
+
+    @override_settings(JWT_LIFETIME_SECONDS=-1)
+    def test_expired_cookie_redirects_to_login(self):
+        self.client.cookies[settings.JWT_COOKIE_NAME] = create_token(self.user)
+        url = self.project_url()
+        self.assertRedirects(self.client.get(url), f"/accounts/login/?next={url}")
 
     def test_home_lists_only_member_teams_and_their_projects(self):
         second_team = Team.objects.create(name="Second writing team")
@@ -132,21 +141,29 @@ class SharedSyncTests(TestCase):
         self.client = Client(enforce_csrf_checks=True)
         self.user = get_user_model().objects.create_user(email="writer@example.com", display_name="Writer")
 
+    def sign_in(self):
+        self.client.cookies[settings.JWT_COOKIE_NAME] = create_token(self.user)
+
     def test_anonymous_sync_is_json_401_even_without_csrf(self):
         response = self.client.post("/sync", {"markdown_source": VALID}, content_type="application/json")
         self.assertEqual(response.status_code, 401)
         self.assertFalse(response.json()["ok"])
         self.assertTrue(response.json()["diagnostics"])
 
-    def test_authenticated_sync_without_csrf_is_json_403(self):
+    def test_admin_session_alone_cannot_sync(self):
         self.client.force_login(self.user)
+        response = self.client.post("/sync", {"markdown_source": VALID}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+
+    def test_authenticated_sync_without_csrf_is_json_403(self):
+        self.sign_in()
         response = self.client.post("/sync", {"markdown_source": VALID}, content_type="application/json")
         self.assertEqual(response.status_code, 403)
         self.assertFalse(response.json()["ok"])
         self.assertTrue(response.json()["diagnostics"])
 
     def test_authenticated_sync_with_csrf_returns_graph(self):
-        self.client.force_login(self.user)
+        self.sign_in()
         self.client.get("/")
         token = self.client.cookies[settings.CSRF_COOKIE_NAME].value
         response = self.client.post("/sync", {"markdown_source": VALID}, content_type="application/json", HTTP_X_CSRFTOKEN=token)

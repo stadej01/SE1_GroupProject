@@ -72,7 +72,7 @@ python -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 </details>
 
-The last command prints a new value each time and changes nothing. Generate it once for your environment and keep it: changing it later ends existing login sessions.
+The last command prints a new value each time and changes nothing. Generate it once for your environment and keep it: changing it later signs everyone out.
 
 Open `.env` in the repository root and fill in:
 
@@ -297,7 +297,7 @@ SQLite and memory storage cannot prove the locks between backend processes. [Thi
 | --- | --- |
 | [setup.sh](setup.sh), [setup.ps1](setup.ps1) | Install dependencies and build the frontend |
 | [start.sh](start.sh), [start.ps1](start.ps1) | Check the configuration and start the full app |
-| [backend/accounts/](backend/accounts/) | Email accounts, login, and registration |
+| [backend/accounts/](backend/accounts/) | Email accounts, token login, and registration |
 | [backend/teams/](backend/teams/) | Teams and membership |
 | [backend/projects/](backend/projects/) | Project pages, API, positions, and GitHub storage |
 | [backend/config/](backend/config/) | Settings and shared routes |
@@ -308,17 +308,65 @@ SQLite and memory storage cannot prove the locks between backend processes. [Thi
 | [frontend/src/components/](frontend/src/components/) | Graph, nodes, and edges |
 | [frontend/e2e/](frontend/e2e/) | Browser tests |
 
-### Project API
+### Sign-in and project API
 
-Requests use the browser's login session; writes also send its CSRF token.
+The login page sends the email and password to `POST /api/v1/auth/login`. It returns a token that lasts 8 hours. Because the login page also sends its CSRF token, the reply stores the token in an httpOnly cookie. The pages, `/sync`, and the project API read that cookie; writes from the browser also send the CSRF token. Scripts get the token without a cookie, send it as `Authorization: Bearer <token>`, and need no CSRF token. A Django admin login in the same browser also works for project requests, but not for the pages.
 
 | Request | Result |
 | --- | --- |
+| `POST /api/v1/auth/login` | Sign in with `email` and `password`; returns `token`, `user`, and `teams` with their projects |
 | `POST /api/v1/projects` | Create with `name` and `team_id`; returns `201` |
 | `GET /api/v1/projects/<project_id>` | Read Markdown, `revision`, and `layout_data` |
 | `PUT /api/v1/projects/<project_id>/save` | Send `markdown_source`, `layout_data.nodes`, and `base_revision`; returns the new revision |
 
 A stale save returns `409`. Failed storage reads or writes return `503`, as does waiting too long for another save to the same branch. The editor displays the reason and keeps unsaved text available.
+
+#### Use a token from a terminal
+
+Start the app first. Sign in with your account:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "your-password"}'
+```
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+$login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/auth/login -ContentType "application/json" -Body (@{email="you@example.com"; password="your-password"} | ConvertTo-Json)
+$login | ConvertTo-Json -Depth 5
+```
+</details>
+
+**You should see:** a `token`, your `user` (`id`, `name`, `email`), and your `teams` with their projects. Capitalization in the email does not matter.
+
+Create a project with the token, using a `team_id` from that reply:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"name": "Token Demo", "team_id": <team_id>}'
+```
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/projects -ContentType "application/json" -Headers @{Authorization="Bearer $($login.token)"} -Body (@{name="Token Demo"; team_id=$login.teams[0].team_id} | ConvertTo-Json)
+```
+</details>
+
+**You should see:** the new project's `project_id` and `revision` 1. It also appears on your home page.
+
+| Request | Response |
+| --- | --- |
+| Wrong password, or an email that is not registered | `401`, `Invalid email or password.`, and no token |
+| Email or password missing or blank | `400`, naming the missing field |
+| Missing, invalid, or expired token on a project request | `401`, no project data |
+| Valid token, but the user is not on the project's team | `403` |
 
 ### What the content repository holds
 
@@ -399,5 +447,5 @@ python manage.py runserver 127.0.0.1:8000 --settings=config.settings
 - Layout direction resets when a project reopens.
 - Browsers do not allow a custom dialog when a tab closes. Only **← Projects** offers save or discard; other ways of leaving use the browser's built-in prompt.
 - Write the first node of a new project in Markdown before adding more nodes through the graph.
-- Registration and login pages are temporary. US-31b will replace them.
+- **Log out** clears the cookie in that browser only. A token copied elsewhere stays valid until it expires.
 - The service targets local development and demos. Registration is open.

@@ -6,6 +6,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_safe
 
+from accounts.token_cookie import use_token_user
 from editor.views import sync as editor_sync
 
 
@@ -19,9 +20,9 @@ def diagnostic_response(message, status):
 @never_cache
 @csrf_exempt
 def sync(request):
-    # Check login first so an expired session returns JSON 401 even without a token.
-    # Authenticated requests still pass the full CSRF check before parsing.
-    if not request.user.is_authenticated:
+    # Check the token cookie first so an expired login returns JSON 401 even without a CSRF token.
+    # Signed-in requests still pass the full CSRF check before parsing.
+    if not use_token_user(request).is_authenticated:
         return diagnostic_response("Please log in before parsing.", 401)
     return csrf_protect(editor_sync)(request)
 
