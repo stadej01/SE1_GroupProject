@@ -38,8 +38,11 @@ INSTALLED_APPS = [
 
 AUTH_USER_MODEL = "accounts.User"
 
+JWT_LIFETIME_SECONDS = 60 * 60
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.JWTAuthentication",
         "accounts.authentication.SessionLoginAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
