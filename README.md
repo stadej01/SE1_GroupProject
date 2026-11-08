@@ -193,9 +193,12 @@ The project API creates, opens, and saves projects. It runs on the Neon server a
 
 | Request | Purpose | Responses |
 | --- | --- | --- |
+| `POST /api/v1/auth/login` | Sign in with an email and password and get a token | `200`, `400`, `401` |
 | `POST /api/v1/projects` | Create a project for a team | `201`, `400`, `401`, `403`, `422` |
 | `GET /api/v1/projects/<project_id>` | Open a project with its Markdown and node positions | `200`, `401`, `403`, `404`, `503` |
 | `PUT /api/v1/projects/<project_id>/save` | Save Markdown and node positions | `200`, `400`, `401`, `403`, `404`, `409`, `503` |
+
+Project requests accept either a sign-in token (`Authorization: Bearer <token>`) or the Django admin session. Tokens expire after one hour.
 
 A save sends the `base_revision` it started from. If another save happened first, the response is `409` and nothing changes.
 
@@ -410,14 +413,81 @@ In a new terminal, activate the virtual environment from `backend/` and run:
 python manage.py test accounts teams config projects --settings=config.settings_auth_test
 ```
 
-**Expected:** `Ran 42 tests` and `OK`. These tests use a temporary SQLite database, not Neon or GitHub.
+**Expected:** `Ran 64 tests` and `OK`. These tests use a temporary SQLite database, not Neon or GitHub.
+
+### Sign in with a token
+
+The login endpoint returns a token plus the teams you belong to and their projects. Send the token in an `Authorization: Bearer` header instead of using the admin session. Use an account that is on a team, as in step 7 of the setup.
+
+#### 1. Sign in
+
+macOS:
+
+```bash
+curl -s -X POST http://127.0.0.1:8001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "your-password"}'
+```
+
+Windows PowerShell:
+
+```powershell
+$login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/auth/login -ContentType "application/json" -Body (@{email="you@example.com"; password="your-password"} | ConvertTo-Json)
+$login | ConvertTo-Json -Depth 5
+```
+
+**Expected:** `200 OK` with a `token`, a `user` (its `id`, `name`, and `email`), and `teams`. Capitalization in the email doesn't matter.
+
+```json
+{
+  "token": "<token>",
+  "user": {"id": 1, "name": "Designer", "email": "designer@example.com"},
+  "teams": [
+    {
+      "team_id": 1,
+      "name": "Team 6",
+      "projects": [
+        {"project_id": "<project_id>", "name": "Sprint 3 Demo", "revision": 2, "updated_at": "<time>"}
+      ]
+    }
+  ]
+}
+```
+
+#### 2. Use the token
+
+macOS (replace `<token>` with the token from step 1):
+
+```bash
+curl -s -X POST http://127.0.0.1:8001/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"name": "Token Demo", "team_id": 1}'
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/projects -ContentType "application/json" -Headers @{Authorization="Bearer $($login.token)"} -Body '{"name": "Token Demo", "team_id": 1}'
+```
+
+**Expected:** `201 Created`.
+
+#### 3. Try the failures
+
+| Request | Response |
+| --- | --- |
+| Wrong password, or an email that is not registered | `401`, no token, and the same message for both |
+| Email or password missing or blank | `400`, naming the missing field |
+| Missing, invalid, or expired token on a project request | `401`, no project data |
+| Valid token, but the user is not on the project's team | `403` |
 
 ### If something goes wrong
 
 | What you see | What to do |
 | --- | --- |
 | `Set the DJANGO_SECRET_KEY` | Create `.env` in the project root, not in `backend/`. See step 4 of the setup. |
-| `401` | Sign in at <http://127.0.0.1:8001/admin/> in the same browser. |
+| `401` | Send a token from `POST /api/v1/auth/login` as `Authorization: Bearer <token>`, or sign in at <http://127.0.0.1:8001/admin/> in the same browser. |
 | `403` and `You are not a member of this team.` | Check `team_id`, and add your account under **Teams > Team memberships**. |
 | `405` | This is expected when you first open an API page. Use the form at the bottom. |
 | `409` | `base_revision` is out of date. Use the latest `revision` from the API. |
@@ -477,6 +547,8 @@ The `editor` tests cover the Django editor endpoints, draft saving, validation, 
 
 The `projects` tests cover creating, opening, and saving projects, revision conflicts, team access, malformed layouts, and storage failures. Regression tests cover consistent snapshots during interleaved saves and unchanged project data after failures to read the previous saved Markdown. GitHub storage tests use a simulated GitHub API: commits, reading earlier versions, position-only saves without a commit, GitHub errors, and a database failure after a commit.
 
+The `accounts` tests also cover sign-in tokens, Bearer authentication, the login endpoint, and the teams list returned at login.
+
 If your Python virtual environment is missing, create it from `backend/` (`python3 -m venv .venv` on macOS) and install packages with `python -m pip install -r requirements.txt`. If frontend dependencies are missing, run `npm ci` in `frontend/` before rerunning the checks.
 
 ### Browser integration tests (optional)
@@ -501,7 +573,7 @@ The browser tests exercise the actual editor UI. Depending on the Playwright con
 | `backend/config/settings_neon.py` | Separate Neon configuration for accounts, teams, and projects. |
 | `backend/config/urls_neon.py` | Neon demo routes for Django admin, the health endpoint, and the project API. |
 | `backend/config/settings_auth_test.py` | SQLite-only test configuration for accounts, teams, and projects. |
-| `backend/accounts/` | Custom email-based user model, admin, and tests. |
+| `backend/accounts/` | Custom email-based user model, admin, token sign-in, and tests. |
 | `backend/teams/` | Team and membership models, admin, and tests. |
 | `backend/projects/` | Project API, node positions in Neon, Markdown storage in GitHub, and tests. Runs with the Neon configuration. |
 | `backend/editor/` | Editor page, draft saving, and parse endpoints. |
@@ -535,8 +607,8 @@ The Markdown parser is still a regex-based prototype, not the planned Lark imple
 
 The dialogue editor does not yet use login, team membership permissions, or a Neon project model. Draft ownership is based on a browser session and stored locally in SQLite. Node positions are not permanently saved, and cross-file links are not implemented yet. JSON graph data exists, but a separate JSON download/export feature is still planned.
 
-The accounts demo uses Django admin, not a custom user-facing login page. Integration with the editor is planned for a future sprint.
+The accounts demo uses Django admin, not a custom user-facing login page. Signing in is an API endpoint with no login page yet, so the teams dashboard is returned in the login response and not displayed. Integration with the editor is planned for a future sprint.
 
-The project API saves Markdown and node positions, but the editor does not call it yet, so the editor's drafts and node positions stay as described above. The API uses the Django admin session for login, because the login endpoint is not built yet. Save does not run the parser yet, so `diagnostics` is always empty and positions of deleted nodes are kept. Repository writes run one at a time within one server process.
+The project API saves Markdown and node positions, but the editor does not call it yet, so the editor's drafts and node positions stay as described above. The API accepts a sign-in token from `POST /api/v1/auth/login` or the Django admin session. The admin session is kept so the earlier demo steps still work. Save does not run the parser yet, so `diagnostics` is always empty and positions of deleted nodes are kept. Repository writes run one at a time within one server process.
 
 This setup is for local development and demos, not public deployment.
