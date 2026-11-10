@@ -3,29 +3,37 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Dialogue editor</title>
+  <title>{% if project %}{{ project.name }} · {% endif %}Dialogue editor</title>
   {% for stylesheet in assets.styles %}<link rel="stylesheet" href="{{ stylesheet }}">{% endfor %}
 </head>
 <body>
-  <main id="editor" data-sync-url="{% url 'editor:sync' %}" data-save-url="{% url 'editor:save' %}" data-revision="{{ revision }}">
+  <main id="editor" data-sync-url="{{ sync_url }}" data-save-url="{{ save_url }}" data-open-url="{{ open_url }}" data-revision="{{ revision }}" data-csrf-cookie="{{ csrf_cookie_name }}"{% if login_url %} data-login-url="{{ login_url }}"{% endif %}>
     <header class="app-header">
-      <div class="app-identity"><span class="app-mark" aria-hidden="true">↳</span><div><p class="eyebrow">STORY WORKSPACE</p><h1>Dialogue editor</h1></div></div>
-      <div class="actions"><span id="save-status" class="save-status" role="status">Draft loaded</span><button id="save-button" type="button" disabled>Save draft</button><button id="parse-button" class="primary" type="button" disabled>Parse Markdown <span aria-hidden="true">↗</span></button></div>
+      <div class="app-identity">{% if project %}<nav aria-label="Project navigation"><a id="back-to-projects" class="back-link" href="{% url 'pages:home' %}">← Projects</a></nav><span class="crumb-separator" aria-hidden="true">/</span>{% endif %}<h1{% if project %} title="{{ project.name }}"{% endif %}>{% if project %}{{ project.name }}{% else %}Dialogue editor{% endif %}</h1></div>
+      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if project %}<form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
     </header>
-    <div class="workspace">
+    <div id="workspace" class="workspace">
       <section class="source-panel panel" aria-labelledby="source-heading">
-        <header class="panel-header"><div><p class="eyebrow">01 / SOURCE</p><h2 id="source-heading"><label for="markdown-source">Markdown</label></h2></div><span id="line-count" class="badge"></span></header>
-        <div class="source-editor"><pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre><textarea id="markdown-source" aria-describedby="source-help" spellcheck="false" wrap="off">{{ markdown_source }}</textarea></div>
+        <header class="panel-header"><div class="panel-title"><h2 id="source-heading"><label for="markdown-source">Markdown</label></h2><span id="line-count" class="badge"></span></div><button id="parse-button" type="button" aria-label="Parse Markdown" disabled>Parse</button></header>
+        <div class="source-editor"><pre id="line-numbers" class="line-numbers" aria-hidden="true">1</pre><textarea id="markdown-source" aria-describedby="source-help" spellcheck="false" wrap="off"{% if open_url %} disabled{% endif %}>{{ markdown_source }}</textarea></div>
         <footer class="source-footer"><span id="source-selection">Select a node to find its source.</span><span id="source-help">Ctrl / ⌘ + Enter to parse</span></footer>
       </section>
+      <div id="panel-divider" class="panel-divider" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Resize Markdown and graph panels" aria-valuenow="38" aria-valuemin="0" aria-valuemax="100"></div>
       <section class="graph-panel panel" aria-labelledby="graph-heading">
-        <header class="panel-header"><div><p class="eyebrow">02 / STRUCTURE</p><h2 id="graph-heading">Dialogue graph</h2></div><span id="graph-count" class="badge">Not parsed</span></header>
+        <header id="graph-panel-header" class="panel-header"><h2 id="graph-heading" class="visually-hidden">Dialogue graph</h2></header>
         <div id="graph-root" class="graph-root"><div class="empty-state"><span class="empty-glyph" aria-hidden="true">↳</span><h3>Your story, connected.</h3><p>Parse the Markdown to see dialogue nodes, choices, and jumps.</p></div></div>
-        <footer class="graph-footer"><span id="parse-status" role="status">Ready to parse</span><span>Drag to arrange · Scroll to zoom</span></footer>
+        <footer class="graph-footer"><span class="graph-summary"><span id="parse-status" role="status">Ready to parse</span><span aria-hidden="true">·</span><span id="graph-count">Not parsed</span></span><span>Drag to arrange · Scroll to zoom</span></footer>
       </section>
     </div>
-    <section id="diagnostics-panel" class="diagnostics" aria-labelledby="diagnostics-heading" hidden><h2 id="diagnostics-heading">Markdown needs attention</h2><p id="diagnostics-help">You can still save this draft. Fix these issues before generating the graph.</p><ul id="diagnostics"></ul></section>
+    <section id="diagnostics-panel" class="diagnostics" aria-labelledby="diagnostics-heading" hidden><h2 id="diagnostics-heading">Markdown needs attention</h2><p id="diagnostics-help">You can still save this {% if open_url %}project{% else %}draft{% endif %}. Fix these issues before generating the graph.</p><ul id="diagnostics"></ul></section>
     <div hidden>{% csrf_token %}</div>
+    {% if project %}
+    <dialog id="leave-dialog" class="leave-dialog" aria-labelledby="leave-dialog-title" aria-describedby="leave-dialog-help">
+      <h2 id="leave-dialog-title">Save your changes before leaving?</h2>
+      <p id="leave-dialog-help">This project has unsaved changes. If you discard them, they cannot be restored.</p>
+      <div class="leave-dialog-actions"><button id="leave-discard" type="button">Discard changes</button><button id="leave-cancel" type="button">Cancel</button><button id="leave-save" class="primary" type="button" autofocus>Save and leave</button></div>
+    </dialog>
+    {% endif %}
   </main>
   <noscript><p>This editor needs JavaScript to parse, save, and display the graph.</p></noscript>
   {% if assets %}<script type="module" src="{{ assets.script }}"></script>{% else %}<p>Frontend assets are missing. Run <code>npm ci &amp;&amp; npm run build</code> in <code>frontend/</code>, then reload.</p>{% endif %}

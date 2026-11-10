@@ -1,183 +1,142 @@
-# SE1 Group Project
+# Dialogue Scripting Tool
 
-This repository contains two Django demos that we're keeping separate for this sprint:
+A browser editor for writing dialogue as Markdown and arranging it as a node graph.
+Register, create a project, edit its dialogue, and save its text and node positions.
+Neon stores accounts, teams, projects, and node positions; a private GitHub repository stores Markdown and its history.
 
-- **Dialogue editor:** Write game dialogue in Markdown, turn it into a React Flow graph, and edit nodes and connections. Drafts are stored in a local SQLite database.
+People using the editor only register and log in. The database and repository below are for whoever runs the backend. By default each developer sets up their own, so one person's data never reaches another's. To skip that, see [Optional: use a shared `.env`](#optional-use-a-shared-env).
 
-- **Accounts, teams, and projects:** Manage email-based user accounts and team memberships through Django admin, and create, open, and save projects through the project API. This demo uses Neon PostgreSQL, and saved Markdown goes to a private GitHub repository.
+## Quick start
 
-Both demos use the same source repository, but **they do not share a database**. The dialogue parser and editor do not connect to Neon. We plan to integrate the two systems in a later sprint.
+### Before you start
 
-## Requirements
+Install Python **3.12** and Node.js **22.12 or newer** (with npm). Create free [Neon](https://console.neon.tech/) and [GitHub](https://github.com/) accounts.
+Open one terminal in the repository root: the folder containing `backend/`, `frontend/`, and `.env.example`. Keep this terminal open through all six steps.
 
-- Python **3.12** (recommended for the team's pinned dependencies)
+### 1. Install dependencies and build the frontend
 
-- Node.js **22.12 or newer**, with npm
-
-- Terminal on macOS or PowerShell on Windows
-
-- A free Neon account and a free GitHub account **only if you're running the accounts and project API demo**
-
-Start in the project root, the folder containing `backend/`, `frontend/`, and `fixtures/`.
-
-## macOS: first-time setup
-
-Open a separate Terminal window for each process you want to run. If you're only working on the dialogue editor, you need Terminals 1 and 2.
-
-### Terminal 1 — Frontend build
+From the repository root, run:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+./setup.sh
 ```
 
-Leave this terminal open. In this project, `npm run dev` runs `vite build --watch`: it builds the React files that Django serves and rebuilds them when you make changes. It doesn't start a separate frontend website.
+<details>
+<summary>Windows PowerShell</summary>
 
-### Terminal 2 — Dialogue editor (SQLite)
+```powershell
+.\setup.ps1
+```
+
+If PowerShell blocks the script, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in this terminal, then repeat the command.
+</details>
+
+**You should see:** package installation completes, Vite reports `built in`, and the script ends with `Setup finished`. It needs no `.env` and touches no database. Run it again after you pull new code and after dependencies change, because the built frontend is not in Git.
+
+### 2. Create your Neon database
+
+In the Neon console, create a project for your own development. Open **Connect**, select your database, turn **Connection pooling** off, and copy the connection string for step 4. [Neon connection guide](https://neon.com/docs/connect/connect-from-any-app).
+
+![Neon Connect with pooling off and credentials hidden](docs/images/project-api/neon-connect.png)
+
+**You should see:** a connection string starting with `postgresql://`, with `sslmode=require` and no `-pooler` in the hostname.
+
+### 3. Create your private GitHub repository and token
+
+In your browser, [create a private repository](https://github.com/new) under your own account, separate from this source repository. Enable **Add a README file** to create its `main` branch.
+Open **Settings > Developer settings > Personal access tokens > Fine-grained tokens** and generate a token. Select your account as **Resource owner**, choose **Only select repositories**, and select the new repository. Set **Contents** to **Read and write**, then copy the token for step 4. [GitHub token guide](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens).
+
+The app does not start without this repository and token. A database and its repository belong together, because the database's paths and commit SHAs only make sense in that repository. Never change one of them and keep the other.
+
+**You should see:** a private repository with a README on `main`, and a token with access to that repository.
+
+### 4. Create `.env` and check the settings
+
+Copy the template and generate a secret key:
 
 ```bash
 cd backend
-python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver 127.0.0.1:8000
+cp ../.env.example ../.env
+python -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
-Open **http://127.0.0.1:8000/**. The editor does not need Neon credentials.
+<details>
+<summary>Windows PowerShell</summary>
 
-### Terminal 3 — Accounts and teams (Neon, optional)
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+Copy-Item ../.env.example ../.env
+python -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+</details>
 
-The first time, follow [Set up Neon and GitHub](#set-up-neon-and-github), which uses your own free accounts, creates a `.env` file in the **project root**, and starts this server. If your team shares a database, ask the teammate managing it for the `.env` values instead. Do not commit `.env` to Git.
+The last command prints a new value each time and changes nothing. Generate it once for your environment and keep it: changing it later signs everyone out.
 
-After that, start the server in a new terminal, starting from the project root:
+Open `.env` in the repository root and fill in:
+
+| Variable | Value |
+| --- | --- |
+| `DJANGO_SECRET_KEY` | The generated secret key |
+| `DATABASE_URL` | The Neon connection string from step 2 |
+| `GITHUB_REPOSITORY` | Your private repository as `owner/name` |
+| `GITHUB_TOKEN` | The token from step 3 |
+
+Keep `DJANGO_DEBUG=True` for local static files and login cookies over HTTP. Keep `GITHUB_BRANCH=main` and the supplied `DJANGO_ALLOWED_HOSTS`.
+**This repository is public. Never commit `.env`, and never paste its values into a document, screenshot, or chat.**
+
+From `backend/`, run this command on both platforms:
 
 ```bash
-cd backend
-source .venv/bin/activate
 python manage.py check --settings=config.settings_neon
-python manage.py runserver 127.0.0.1:8001 --settings=config.settings_neon
 ```
 
-Open **http://127.0.0.1:8001/admin/** and sign in using an existing admin account. The health endpoint is **http://127.0.0.1:8001/api/v1/health/**. The project API runs on this server too; see [Project API](#project-api-neon-demo).
+**You should see:** `System check identified no issues`. A missing value, or the template's secret key, is named here instead. Steps 5 and 6 check the database and GitHub connections.
 
-**On a database shared with the team, check with the team before running migrations, creating users, or running tests.**
+### 5. Create the tables and start the service
 
-## Windows: first-time setup (PowerShell)
-
-Open PowerShell terminals from the project root. Use Terminals 1 and 2 for the editor, plus Terminal 3 if you want to run the accounts demo.
-
-### Terminal 1 — Frontend build
-
-```powershell
-cd frontend
-npm install
-npm run dev
-```
-
-### Terminal 2 — Dialogue editor (SQLite)
-
-```powershell
-cd backend
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python manage.py migrate
-python manage.py runserver 127.0.0.1:8000
-```
-
-Open **http://127.0.0.1:8000/**.
-
-If PowerShell blocks virtual-environment activation, run the following in that terminal and try activating it again:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
-```
-
-If the `py` launcher is unavailable, use `python -m venv .venv` with an installed Python 3.12 interpreter.
-
-### Terminal 3 — Accounts and teams (Neon, optional)
-
-As on macOS, the first time, follow [Set up Neon and GitHub](#set-up-neon-and-github), which creates a project-root `.env` file and starts this server. If your team shares a database, ask the teammate managing it for the `.env` values instead.
-
-After that, start the server in a new PowerShell terminal, starting from the project root:
-
-```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-python manage.py check --settings=config.settings_neon
-python manage.py runserver 127.0.0.1:8001 --settings=config.settings_neon
-```
-
-Open **http://127.0.0.1:8001/admin/**. Avoid migrations, user creation, and tests against the shared Neon database unless the team has approved them. The project API runs on this server too; see [Project API](#project-api-neon-demo).
-
-## Starting the project again
-
-You don't need to recreate `.venv` or reinstall dependencies every time. Reinstall when `requirements.txt` or `package.json` changes. Run migrations again when new Django migrations are added.
-
-**macOS:**
+Confirm that `DATABASE_URL` is your own development database. From `backend/`, with the Python environment active, run on both platforms:
 
 ```bash
-# Terminal 1, from project root
-cd frontend
-npm run dev
+python manage.py migrate --plan --settings=config.settings_neon
+python manage.py migrate --settings=config.settings_neon
+cd ..
 ```
+
+Then start the app:
 
 ```bash
-# Terminal 2, from project root
-cd backend
-source .venv/bin/activate
-python manage.py runserver 127.0.0.1:8000
+./start.sh
 ```
 
-**Windows PowerShell:**
+<details>
+<summary>Windows PowerShell</summary>
 
 ```powershell
-# Terminal 1, from project root
-cd frontend
-npm run dev
+.\start.ps1
 ```
+</details>
 
-```powershell
-# Terminal 2, from project root
-cd backend
-.\.venv\Scripts\Activate.ps1
-python manage.py runserver 127.0.0.1:8000
-```
+The start script checks the configuration and pending migrations, then runs the full app. Neither script ever migrates a database: when `start` reports pending migrations, run `migrate` as above.
 
-If you also want the accounts demo, use a third terminal with the same virtual environment and run:
+**You should see:** migrations marked `OK` (or `No migrations to apply`), then `Starting development server at http://127.0.0.1:8000/`. Leave this terminal running and open [the app](http://127.0.0.1:8000/). The first page is **Log in**.
 
-```bash
-python manage.py runserver 127.0.0.1:8001 --settings=config.settings_neon
-```
+### 6. Create and save your first project
 
-Run that last command from `backend/`. Use `Ctrl+C` to stop either Django server or the frontend watcher.
+In the browser, choose **Create an account**, enter your details, and submit. Registration creates your personal team.
+**You should see:** **Your projects**, your team, and a **New project** form.
 
-## Using the dialogue editor
+Enter `My first dialogue` as the project name and click **Create project**.
+**You should see:** an empty Markdown box and an empty graph.
 
-1. Write or edit dialogue in Markdown, then click **Parse Markdown** to build the graph.
-
-2. Click a node to highlight where it came from in Markdown. You can edit its speaker, dialogue, audience, and extra fields.
-
-3. Use **+ New node** to add a node. Connect nodes by dragging between handles or by using the **From**, **To**, and **Type** controls.
-
-4. Select a connection and click **Delete connection** to remove it.
-
-5. Graph edits appear immediately on the canvas but stay in a pending buffer until you click **Parse Markdown**. Then use **Save draft** to save the updated Markdown.
-
-6. Markdown drafts with syntax errors can still be saved. Errors prevent graph generation and report a line number when one is available.
-
-7. Use the layout controls to switch between horizontal and vertical graphs or rotate connection labels.
-
-For example:
+Paste this into the Markdown box and click **Parse**:
 
 ```markdown
+<!-- start: Node_Greeting -->
 # Node_Greeting
 <!-- category: shop, color: blue -->
 Merchant: Welcome, traveler.
-Merchant: What can I do for you?
 * "Browse the shop" -> Node_Shop
 
 # Node_Shop
@@ -185,430 +144,310 @@ Merchant: Take your time.
 <<jump: Node_Greeting>>
 ```
 
-A larger sample is in `fixtures/merchant.md`.
+**You should see:** two nodes, two connections, and a **START** label on `Node_Greeting`. Parsing completes without a dialog.
 
-## Project API (Neon demo)
+Drag a node, click **Save**, wait for **Saved**, then refresh the page. Open your private GitHub repository and view its commits.
+**You should see:** the same Markdown, two nodes, two connections, and the saved positions. GitHub has a commit named `docs(dialogue): create "My first dialogue" r2 by <your display name>`, containing `teams/<team_id>/projects/<project_id>.md`.
 
-The project API creates, opens, and saves projects. It runs on the Neon server at port 8001, and the dialogue editor does not call it yet. Request and response bodies follow section 4.1 of the Sprint 2 design document.
+## Optional: use a shared `.env`
 
-| Request | Purpose | Responses |
-| --- | --- | --- |
-| `POST /api/v1/auth/login` | Sign in with an email and password and get a token | `200`, `400`, `401` |
-| `POST /api/v1/projects` | Create a project for a team | `201`, `400`, `401`, `403`, `422` |
-| `GET /api/v1/projects/<project_id>` | Open a project with its Markdown and node positions | `200`, `401`, `403`, `404`, `503` |
-| `PUT /api/v1/projects/<project_id>/save` | Save Markdown and node positions | `200`, `400`, `401`, `403`, `404`, `409`, `503` |
+To skip creating your own database and repository, ask the person who maintains a shared development environment for its complete `.env`. It is kept in the team's private location, never in this repository.
 
-Project requests accept either a sign-in token (`Authorization: Bearer <token>`) or the Django admin session. Tokens expire after one hour.
+1. Run step 1 of the Quick start.
+2. Put the file beside `README.md`. Keep every value in it, including `DJANGO_SECRET_KEY`.
+3. Run `./start.sh`, or `.\start.ps1` on Windows.
+4. Create your own account in the browser. Do not share accounts: commits show who saved.
 
-A save sends the `base_revision` it started from. If another save happened first, the response is `409` and nothing changes.
+**You should see:** the **Log in** page, as in step 5.
 
-Opening a project returns Markdown, revision, and node positions from the same saved state. If GitHub cannot return the previous saved Markdown or commit the new content, Save returns `503` and preserves the project's revision, content reference, and node positions. Open returns `503` while GitHub is unavailable.
+Everyone on a shared `.env` uses one database and one repository, each with their own local backend. What you save, and any migration or reset, affects the others. Only the maintainer runs `migrate`: if the start script reports pending migrations, ask them. When the credentials change, replace the file and restart.
 
-### Set up Neon and GitHub
+## Start again later
 
-This demo uses your own free Neon database and private GitHub repository, so you don't need any credentials from our team. Each project's Markdown is saved as `projects/<project_id>.md` in that repository, with one commit for each save that changes it.
-
-**This repository is public. Never commit `.env` or paste its values anywhere.**
-
-#### 1. Install the backend
-
-Skip this step if you already created `backend/.venv` in Terminal 2. Start in the project root.
-
-macOS:
+If you pulled new code since the last run, run `./setup.sh` first, or `.\setup.ps1` on Windows. Then, from the repository root:
 
 ```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+./start.sh
 ```
 
-Windows PowerShell:
+<details>
+<summary>Windows PowerShell</summary>
 
 ```powershell
-cd backend
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+.\start.ps1
 ```
+</details>
 
-Keep this terminal open in `backend/` with the virtual environment active. The steps below use it.
+**You should see:** the server address. Open [the app](http://127.0.0.1:8000/), log in, and choose your project. Its text, graph, and positions load automatically. Stop the server with `Ctrl+C`.
 
-#### 2. Create a Neon database
+## Using the editor
 
-1. Sign in at <https://console.neon.tech/> and create a new project. Any name and region will do.
+- **Parse** builds the graph. Editing Markdown clears the old graph until you parse again.
+- Click a node to mark its source lines and edit its fields. Click a connection to mark its line. Key presses then leave the Markdown alone; click in the Markdown box to edit it. **×** and **Cancel** close the details and discard changes that are not applied. While such changes exist, clicking an empty part of the graph or another node keeps the details open; otherwise an empty click closes them and a node click switches to that node.
+- **+ New node**, connection handles, and the controls under **Connections** edit the graph. **Parse** or **Save** applies those graph edits to Markdown.
+- **Save** stores Markdown and positions. Each successful save advances the revision. A Markdown change also creates a GitHub commit under your display name; moving nodes alone does not.
+- Invalid Markdown can be saved. Parse shows errors and source lines to fix.
+- **Starting nodes** selects conversation entry nodes. **Layout**, under **View**, switches between horizontal and vertical graphs.
+- Drag the line between the two panels to resize them. Double-click it to restore the default width.
+- `Ctrl`/`⌘` + `Enter` parses; `Ctrl`/`⌘` + `S` saves.
+- With unsaved text, graph edits, or moved nodes, **← Projects** asks whether to save or discard. Closing the tab, refreshing, and **Log out** use the browser's own prompt instead.
 
-2. Open **Connect**, turn off **Connection pooling**, and copy the connection string. You'll use it in step 4.
+Use `# Node_ID` for a node, `Speaker: text` for dialogue, `* "Choice" -> Node_ID` for a choice, and `<<jump: Node_ID>>` for a jump. Put `<!-- start: Node_ID -->` before the first heading to mark a starting node. See [the merchant sample](fixtures/merchant.md) for a larger dialogue.
 
-   ![The Neon Connect dialog with Connection pooling turned off and the password and host hidden](docs/images/project-api/neon-connect.png)
+### Changing the frontend
 
-#### 3. Create a private GitHub repository and token
+In a second terminal, from `frontend/`, run `npm run dev` on either platform. It rebuilds files when you edit them. Refresh the Django page after a build.
+**You should see:** Vite watching for file changes. Run `npm ci` after dependency changes; run `npm run build` for a single build.
 
-1. Create a **private** repository at <https://github.com/new> and select **Add a README file**, so the `main` branch exists.
+## Run the tests
 
-2. Under **Settings > Developer settings > Personal access tokens > Fine-grained tokens**, generate a new token. For repository access, choose only the repository you just created. For repository permissions, set **Contents** to **Read and write**.
-
-3. Copy the token. GitHub only shows it once.
-
-#### 4. Create `.env`
-
-Copy the example file to the project root. On Windows, use `Copy-Item ..\.env.example ..\.env`.
+**Never run tests with `config.settings_neon`.** Use the commands below from the repository root. They use local SQLite databases and memory storage.
 
 ```bash
-cp ../.env.example ../.env
-```
-
-Then fill in these values and leave the others as they are:
-
-| Variable | Value |
-| --- | --- |
-| `DJANGO_SECRET_KEY` | The output of `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
-| `DATABASE_URL` | The Neon connection string from step 2 |
-| `GITHUB_REPOSITORY` | Your repository from step 3, as `owner/name` |
-| `GITHUB_TOKEN` | The token from step 3 |
-
-Without `GITHUB_REPOSITORY`, the API still runs, but it makes no GitHub commits and keeps saved Markdown in server memory. After a restart, opening or saving a project whose Markdown was cleared returns `503`. Project records and node positions stay in the database.
-
-#### 5. Create the tables and an admin account
-
-```bash
-python manage.py migrate --settings=config.settings_neon
-python manage.py createsuperuser --settings=config.settings_neon
-```
-
-Enter an email, display name, and password when asked. The email appears in the commit messages in your repository.
-
-On a database that already has accounts, the `accounts` migration lowercases existing emails. If two accounts differ only by capitalization, it stops with an error that names them and changes nothing.
-
-#### 6. Start the server
-
-```bash
-python manage.py runserver 127.0.0.1:8001 --settings=config.settings_neon
-```
-
-Leave it running.
-
-#### 7. Sign in and add a team
-
-1. Sign in at <http://127.0.0.1:8001/admin/> with the admin account from step 5.
-
-   ![The Django admin sign-in page](docs/images/project-api/admin-login.png)
-
-2. Under **Teams > Teams**, add a team.
-
-3. Under **Teams > Team memberships**, add your account to that team.
-
-   ![Adding an account to a team in the Django admin](docs/images/project-api/admin-team-membership.png)
-
-In a new database, the first team's ID is `1`. Otherwise, the ID is the number in the team's admin page URL.
-
-### Run the demo
-
-Use the same browser you signed in with. The API pages first show `405` because the browser sends GET, and that's expected. To send a request, use the form at the bottom of the page with **Media type** set to `application/json`.
-
-#### 1. Create a project
-
-Open <http://127.0.0.1:8001/api/v1/projects>, paste this into the form, and click **POST**:
-
-```json
-{
-  "name": "Sprint 3 Demo",
-  "team_id": 1
-}
-```
-
-![The API page showing 405, with the request filled in the form at the bottom](docs/images/project-api/api-create-form.png)
-
-**Expected:** `201 Created`, with a new `project_id`, an empty `markdown_source`, and `revision: 1`. Copy the `project_id` and use it in place of `<project_id>` below.
-
-![The API response showing 201 Created and the new project_id](docs/images/project-api/api-create-result.png)
-
-#### 2. Check the project in Neon
-
-In the Neon console, open **SQL Editor** and run:
-
-```sql
-select p.name, p.revision, p.head_commit_sha, n.node_id, n.x, n.y
-from projects_project p
-left join projects_nodeposition n on n.project_id = p.id
-order by p.created_at desc
-limit 1;
-```
-
-**Expected:** `Sprint 3 Demo` at `revision` 1, with `head_commit_sha`, `node_id`, `x`, and `y` empty.
-
-![The Neon SQL Editor showing one row for Sprint 3 Demo at revision 1](docs/images/project-api/neon-sql-result.png)
-
-#### 3. Save the project
-
-Open `http://127.0.0.1:8001/api/v1/projects/<project_id>/save`, paste this into the form, and click **PUT**:
-
-```json
-{
-  "markdown_source": "# Node_1\nHello from Team 6!\n",
-  "layout_data": {
-    "nodes": [
-      {
-        "id": "Node_1",
-        "position": {"x": 120, "y": 300}
-      }
-    ]
-  },
-  "base_revision": 1
-}
-```
-
-**Expected:** `200 OK`, with `status: "saved"` and `revision: 2`.
-
-#### 4. See the commit on GitHub
-
-Open your repository's commit list.
-
-**Expected:** The newest commit is `Save Sprint 3 Demo (<project_id>) revision 2 by <your email>`, and it adds `projects/<project_id>.md`.
-
-#### 5. Check Neon again
-
-Run the same query in **SQL Editor**.
-
-**Expected:** `revision` 2, a `head_commit_sha` that matches the GitHub commit, and `Node_1`, `120`, `300`.
-
-#### 6. Open the project
-
-Open `http://127.0.0.1:8001/api/v1/projects/<project_id>`.
-
-**Expected:** `200 OK`, with `Hello from Team 6!` in `markdown_source`, position `120.0`, `300.0`, and `revision: 2`.
-
-#### 7. Try an outdated save
-
-Open the save page from step 3 again, paste this into the form, and click **PUT**:
-
-```json
-{
-  "markdown_source": "# Node_1\nThis change should be rejected.\n",
-  "layout_data": {
-    "nodes": [
-      {
-        "id": "Node_1",
-        "position": {"x": 120, "y": 300}
-      }
-    ]
-  },
-  "base_revision": 1
-}
-```
-
-**Expected:** `409 Conflict`, with `revision: 2`. Run the query in **SQL Editor** again, and `revision` and `head_commit_sha` are unchanged.
-
-#### 8. Restart the server and open the project again
-
-Press `Ctrl+C` in the server terminal, run the command from step 6 of the setup again, and reload the page from step 6 above.
-
-**Expected:** The same Markdown and `revision: 2`. You stay signed in.
-
-#### 9. Run the tests
-
-In a new terminal, activate the virtual environment from `backend/` and run:
-
-```bash
-python manage.py test accounts teams config projects --settings=config.settings_auth_test
-```
-
-**Expected:** `Ran 64 tests` and `OK`. These tests use a temporary SQLite database, not Neon or GitHub.
-
-### Sign in with a token
-
-The login endpoint returns a token plus the teams you belong to and their projects. Send the token in an `Authorization: Bearer` header instead of using the admin session. Use an account that is on a team, as in step 7 of the setup.
-
-#### 1. Sign in
-
-macOS:
-
-```bash
-curl -s -X POST http://127.0.0.1:8001/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "you@example.com", "password": "your-password"}'
-```
-
-Windows PowerShell:
-
-```powershell
-$login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/auth/login -ContentType "application/json" -Body (@{email="you@example.com"; password="your-password"} | ConvertTo-Json)
-$login | ConvertTo-Json -Depth 5
-```
-
-**Expected:** `200 OK` with a `token`, a `user` (its `id`, `name`, and `email`), and `teams`. Capitalization in the email doesn't matter.
-
-```json
-{
-  "token": "<token>",
-  "user": {"id": 1, "name": "Designer", "email": "designer@example.com"},
-  "teams": [
-    {
-      "team_id": 1,
-      "name": "Team 6",
-      "projects": [
-        {"project_id": "<project_id>", "name": "Sprint 3 Demo", "revision": 2, "updated_at": "<time>"}
-      ]
-    }
-  ]
-}
-```
-
-#### 2. Use the token
-
-macOS (replace `<token>` with the token from step 1):
-
-```bash
-curl -s -X POST http://127.0.0.1:8001/api/v1/projects \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <token>" \
-  -d '{"name": "Token Demo", "team_id": 1}'
-```
-
-Windows PowerShell:
-
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8001/api/v1/projects -ContentType "application/json" -Headers @{Authorization="Bearer $($login.token)"} -Body '{"name": "Token Demo", "team_id": 1}'
-```
-
-**Expected:** `201 Created`.
-
-#### 3. Try the failures
-
-| Request | Response |
-| --- | --- |
-| Wrong password, or an email that is not registered | `401`, no token, and the same message for both |
-| Email or password missing or blank | `400`, naming the missing field |
-| Missing, invalid, or expired token on a project request | `401`, no project data |
-| Valid token, but the user is not on the project's team | `403` |
-
-### If something goes wrong
-
-| What you see | What to do |
-| --- | --- |
-| `Set the DJANGO_SECRET_KEY` | Create `.env` in the project root, not in `backend/`. See step 4 of the setup. |
-| `401` | Send a token from `POST /api/v1/auth/login` as `Authorization: Bearer <token>`, or sign in at <http://127.0.0.1:8001/admin/> in the same browser. |
-| `403` and `You are not a member of this team.` | Check `team_id`, and add your account under **Teams > Team memberships**. |
-| `405` | This is expected when you first open an API page. Use the form at the bottom. |
-| `409` | `base_revision` is out of date. Use the latest `revision` from the API. |
-| `503` | Check `GITHUB_REPOSITORY` and `GITHUB_TOKEN`. Without GitHub configured, this also happens after a restart. |
-
-## Demo data
-
-- **Editor:** a new browser session opens with the sample in `fixtures/merchant.md`.
-
-- **Project API:** add one team and one membership in the admin, as in step 7 of [Set up Neon and GitHub](#set-up-neon-and-github). There is no seed command.
-
-## Tests
-
-Run these checks before merging or pushing changes. The editor tests use SQLite, and the accounts, teams, and project tests use a separate temporary SQLite test database. **None of the commands below require Neon credentials or modify the shared Neon database.** They do not verify a live Neon connection.
-
-### macOS — run all primary tests
-
-Start in the repository root (`SE1_GroupProject`), with the Python and Node.js dependencies installed as described above:
-
-```bash
-# Backend: Django editor, Markdown parser, and graph generation
 cd backend
 source .venv/bin/activate
-python manage.py test editor -v 2
-python -m unittest discover -s tests -p 'test_*.py' -v
-
-# Accounts, teams, and project API: isolated SQLite, never Neon
 python manage.py test accounts teams config projects --settings=config.settings_auth_test
-
-# Frontend: TypeScript, React Flow tests, and production build
+python manage.py test editor --settings=config.settings
+python -m unittest discover -s tests -p 'test_*.py'
 cd ../frontend
 npm run typecheck
 npm test
 npm run build
-```
-
-### Windows PowerShell — run all primary tests
-
-Start in the repository root (`SE1_GroupProject`):
-
-```powershell
-# Backend tests
-cd backend
-.\.venv\Scripts\Activate.ps1
-python manage.py test editor -v 2
-python -m unittest discover -s tests -p 'test_*.py' -v
-python manage.py test accounts teams config projects --settings=config.settings_auth_test
-
-# Frontend tests
-cd ..\frontend
-npm run typecheck
-npm test
-npm run build
-```
-
-The `editor` tests cover the Django editor endpoints, draft saving, validation, and CSRF protections. The Python `unittest` command tests Markdown parsing and graph generation. `npm test` checks TypeScript graph mapping and source-selection helpers; `npm run typecheck` catches TypeScript errors, and `npm run build` verifies that the frontend compiles.
-
-The `projects` tests cover creating, opening, and saving projects, revision conflicts, team access, malformed layouts, and storage failures. Regression tests cover consistent snapshots during interleaved saves and unchanged project data after failures to read the previous saved Markdown. GitHub storage tests use a simulated GitHub API: commits, reading earlier versions, position-only saves without a commit, GitHub errors, and a database failure after a commit.
-
-The `accounts` tests also cover sign-in tokens, Bearer authentication, the login endpoint, and the teams list returned at login.
-
-If your Python virtual environment is missing, create it from `backend/` (`python3 -m venv .venv` on macOS) and install packages with `python -m pip install -r requirements.txt`. If frontend dependencies are missing, run `npm ci` in `frontend/` before rerunning the checks.
-
-### Browser integration tests (optional)
-
-From `frontend/`, install the Playwright Chromium browser if needed and run:
-
-```bash
 npx playwright install chromium
 npm run test:e2e
 ```
 
-The browser tests exercise the actual editor UI. Depending on the Playwright configuration, you may need to have Django serving the editor at `http://127.0.0.1:8000/`, plus the Vite build watcher, before running them.
+<details>
+<summary>Windows PowerShell</summary>
 
-**After testing:** `npm run build` can regenerate the tracked files under `backend/editor/static/editor/dist/`. Use `git status` from the repository root to review those changes before committing; generated files are not necessarily source-code changes.
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python manage.py test accounts teams config projects --settings=config.settings_auth_test
+python manage.py test editor --settings=config.settings
+python -m unittest discover -s tests -p 'test_*.py'
+cd ../frontend
+npm run typecheck
+npm test
+npm run build
+npx playwright install chromium
+npm run test:e2e
+```
+</details>
 
-## Main files
+**You should see:** Python tests finish with `OK`, frontend tests pass, typecheck exits successfully, and Playwright reports all tests passed.
+Playwright starts its own services: the existing editor tests use port 8765; project tests use port 8766 with `config.settings_e2e`. Their ignored `.sqlite3` files persist between runs. Project tests create unique accounts each time.
 
-| File or folder | Purpose |
+For a manual browser check without cloud services, use `config.settings_e2e`. From `backend/`, with the Python environment active and the frontend built:
+
+```bash
+export DJANGO_DATABASE_PATH="$PWD/manual-e2e.sqlite3"
+python manage.py migrate --settings=config.settings_e2e
+python manage.py runserver 127.0.0.1:8766 --settings=config.settings_e2e
+```
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+$env:DJANGO_DATABASE_PATH = "$PWD/manual-e2e.sqlite3"
+python manage.py migrate --settings=config.settings_e2e
+python manage.py runserver 127.0.0.1:8766 --settings=config.settings_e2e
+```
+</details>
+
+**You should see:** the login page at [port 8766](http://127.0.0.1:8766/). This mode uses SQLite and memory storage; saved Markdown lasts for one server run. Close this terminal when finished.
+
+### Saves from several backends
+
+SQLite and memory storage cannot prove the locks between backend processes. [This check](backend/tests/integration/check_concurrent_saves.py) starts two backends on a local PostgreSQL database and a test branch of a private repository. Its first lines explain the setup. Never point it at a database or branch that holds real data.
+
+**You should see:** `All integration checks passed.`
+
+## If something goes wrong
+
+| What you see | What to do |
 | --- | --- |
-| `backend/config/settings.py` | Dialogue editor configuration: SQLite, editor app, and local settings. |
-| `backend/config/urls.py` | Dialogue editor routes. |
-| `backend/config/settings_neon.py` | Separate Neon configuration for accounts, teams, and projects. |
-| `backend/config/urls_neon.py` | Neon demo routes for Django admin, the health endpoint, and the project API. |
-| `backend/config/settings_auth_test.py` | SQLite-only test configuration for accounts, teams, and projects. |
-| `backend/accounts/` | Custom email-based user model, admin, token sign-in, and tests. |
-| `backend/teams/` | Team and membership models, admin, and tests. |
-| `backend/projects/` | Project API, node positions in Neon, Markdown storage in GitHub, and tests. Runs with the Neon configuration. |
-| `backend/editor/` | Editor page, draft saving, and parse endpoints. |
-| `backend/dialogue_graph/` | Markdown parsing, validation, and graph generation. |
-| `frontend/src/main.tsx` | Editor controls, API requests, and graph-editing actions. |
-| `frontend/src/components/` | React Flow graph, custom nodes, and edges. |
-| `frontend/src/graph/toFlow.ts` | Graph layout and edge routing. |
-| `fixtures/` | Sample Markdown and expected graph output. |
+| `(projects.E001)` with a setting's name | Fill in that value in `.env`, beside `README.md`, as in step 4. With a shared `.env`, check the file you received. Start again. |
+| `The database has unapplied migrations` | In your own environment, confirm `DATABASE_URL` and run `migrate` as in step 5. With a shared `.env`, ask its maintainer. |
+| `Could not read the database` | Replace `DATABASE_URL` with the direct connection string from Neon Connect, including `sslmode=require`, then start again. |
+| The merchant example opens without login | Stop the server and run `./start.sh`, or `.\start.ps1` on Windows. |
+| `Frontend assets are missing` | Run `./setup.sh`, or `.\setup.ps1` on Windows, then refresh. |
+| `Project storage is not available right now` | Correct `GITHUB_REPOSITORY`, `GITHUB_TOKEN`, and `GITHUB_BRANCH` in `.env`. Give the token Contents read and write access. Restart the server and retry Save. Your text stays on the page. This also appears when another save holds the branch for over 15 seconds; then just retry. |
+| `You do not belong to a team yet` | Add the account under **Teams > Team memberships** in Django admin, then refresh the home page. |
+| `Error: That port is already in use.` | Press `Ctrl+C` in the terminal running the earlier server, then start this service again. |
 
-See `FILE_GUIDE.md` for a more detailed breakdown. `MERGE_NOTES.md` records the original sprint merge approach.
+## Reference
 
-## Troubleshooting
+### Settings
 
-- **`requirements.txt` not found:** Run `pip install -r requirements.txt` inside `backend/`.
+| Module | Use |
+| --- | --- |
+| `config.settings_neon` | Local app with accounts, teams, projects, Neon, and GitHub |
+| `config.settings_auth_test` | Automated account and project tests with temporary SQLite |
+| `config.settings_e2e` | Browser checks with file-based SQLite and memory storage |
+| `config.settings_integration` | Lock checks with a local PostgreSQL and a test branch |
+| `config.settings` | Old SQLite editor demo and its tests; `manage.py` default |
 
-- **`manage.py` not found:** Move into `backend/` before running Django commands.
+`manage.py` alone starts the old demo, so include `--settings=config.settings_neon` when you run it for the full app. Only the test settings use memory storage.
 
-- **Vite says `build --watch`:** That's expected. Open the editor through Django at port 8000, not a Vite URL.
+### Main files
 
-- **Frontend changes aren't showing up:** Check the Vite terminal for errors and refresh your browser.
+| Path | Purpose |
+| --- | --- |
+| [setup.sh](setup.sh), [setup.ps1](setup.ps1) | Install dependencies and build the frontend |
+| [start.sh](start.sh), [start.ps1](start.ps1) | Check the configuration and start the full app |
+| [backend/accounts/](backend/accounts/) | Email accounts, token login, and registration |
+| [backend/teams/](backend/teams/) | Teams and membership |
+| [backend/projects/](backend/projects/) | Project pages, API, positions, and GitHub storage |
+| [backend/config/](backend/config/) | Settings and shared routes |
+| [backend/editor/](backend/editor/) | Editor page, assets, and parse endpoint |
+| [backend/dialogue_graph/](backend/dialogue_graph/) | Markdown parser and graph validation |
+| [frontend/src/main.tsx](frontend/src/main.tsx) | Editor controls and graph edits |
+| [frontend/src/project/](frontend/src/project/) | Loading, saving, positions, and unsaved state |
+| [frontend/src/components/](frontend/src/components/) | Graph, nodes, and edges |
+| [frontend/e2e/](frontend/e2e/) | Browser tests |
 
-- **Port already in use:** Stop the older server before restarting it. The editor is intended for port 8000; accounts uses 8001.
+### Sign-in and project API
 
-- **TypeScript reports missing CSS or Vite declarations:** Run `npm install` in `frontend/`, then restart the TypeScript server in your editor.
+The login page sends the email and password to `POST /api/v1/auth/login`. It returns a token that lasts 8 hours. Because the login page also sends its CSRF token, the reply stores the token in an httpOnly cookie. The pages, `/sync`, and the project API read that cookie; writes from the browser also send the CSRF token. Scripts get the token without a cookie, send it as `Authorization: Bearer <token>`, and need no CSRF token. A Django admin login in the same browser also works for project requests, but not for the pages.
 
-- **Neon demo doesn't start:** Check that `.env` exists in the project root and contains valid credentials. Do not post credentials in chat or commit them to the repository.
+| Request | Result |
+| --- | --- |
+| `POST /api/v1/auth/login` | Sign in with `email` and `password`; returns `token`, `user`, and `teams` with their projects |
+| `POST /api/v1/projects` | Create with `name` and `team_id`; returns `201` |
+| `GET /api/v1/projects/<project_id>` | Read Markdown, `revision`, and `layout_data` |
+| `PUT /api/v1/projects/<project_id>/save` | Send `markdown_source`, `layout_data.nodes`, and `base_revision`; returns the new revision |
 
-## Current limitations
+A stale save returns `409`. Failed storage reads or writes return `503`, as does waiting too long for another save to the same branch. The editor displays the reason and keeps unsaved text available.
 
-The Markdown parser is still a regex-based prototype, not the planned Lark implementation. It handles basic dialogue, choices, jumps, conditions, and metadata, but not the full planned language for quests, characters, inventories, and complex state.
+#### Use a token from a terminal
 
-The dialogue editor does not yet use login, team membership permissions, or a Neon project model. Draft ownership is based on a browser session and stored locally in SQLite. Node positions are not permanently saved, and cross-file links are not implemented yet. JSON graph data exists, but a separate JSON download/export feature is still planned.
+Start the app first. Sign in with your account:
 
-The accounts demo uses Django admin, not a custom user-facing login page. Signing in is an API endpoint with no login page yet, so the teams dashboard is returned in the login response and not displayed. Integration with the editor is planned for a future sprint.
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "your-password"}'
+```
 
-The project API saves Markdown and node positions, but the editor does not call it yet, so the editor's drafts and node positions stay as described above. The API accepts a sign-in token from `POST /api/v1/auth/login` or the Django admin session. The admin session is kept so the earlier demo steps still work. Save does not run the parser yet, so `diagnostics` is always empty and positions of deleted nodes are kept. Repository writes run one at a time within one server process.
+<details>
+<summary>Windows PowerShell</summary>
 
-This setup is for local development and demos, not public deployment.
+```powershell
+$login = Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/auth/login -ContentType "application/json" -Body (@{email="you@example.com"; password="your-password"} | ConvertTo-Json)
+$login | ConvertTo-Json -Depth 5
+```
+</details>
+
+**You should see:** a `token`, your `user` (`id`, `name`, `email`), and your `teams` with their projects. Capitalization in the email does not matter.
+
+Create a project with the token, using a `team_id` from that reply:
+
+```bash
+curl -s -X POST http://127.0.0.1:8000/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"name": "Token Demo", "team_id": <team_id>}'
+```
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/v1/projects -ContentType "application/json" -Headers @{Authorization="Bearer $($login.token)"} -Body (@{name="Token Demo"; team_id=$login.teams[0].team_id} | ConvertTo-Json)
+```
+</details>
+
+**You should see:** the new project's `project_id` and `revision` 1. It also appears on your home page.
+
+| Request | Response |
+| --- | --- |
+| Wrong password, or an email that is not registered | `401`, `Invalid email or password.`, and no token |
+| Email or password missing or blank | `400`, naming the missing field |
+| Missing, invalid, or expired token on a project request | `401`, no project data |
+| Valid token, but the user is not on the project's team | `403` |
+
+### What the content repository holds
+
+Each project is one file, `teams/<team_id>/projects/<project_id>.md`, holding only its Markdown. The path never changes, and renaming a project or team does not move it. Only a change to the text creates a commit:
+
+| Field | Value |
+| --- | --- |
+| Title | `docs(dialogue): create "Act 1" r2 by Leyan`, or `update` once the project has saved text |
+| Author | The saver's display name, with `user-<id>@dialogue.invalid` as a fixed identifier that receives no mail |
+| Committer | The GitHub account that owns the token |
+
+The revision in a title can skip numbers, because saving only positions also advances it. A commit is not proof of a successful save: the database's commit SHA decides which version opens. The app does not import direct edits to the repository, and its next save can overwrite them, so do not fix dialogue on GitHub.
+
+### Inspect the latest project in Neon
+
+Run this read-only query in the Neon **SQL Editor**:
+
+```sql
+select p.id, p.name, p.revision, p.head_commit_sha, n.node_id, n.x, n.y
+from projects_project p
+left join projects_nodeposition n on n.project_id = p.id
+where p.id = (select id from projects_project order by created_at desc limit 1)
+order by n.node_id;
+```
+
+**You should see:** one row per saved node, with the project's revision, GitHub commit SHA, and coordinates.
+
+### Add another person to a team
+
+From `backend/`, with the Python environment active, run `python manage.py createsuperuser --settings=config.settings_neon` on either platform and enter the requested details.
+**You should see:** `Superuser created successfully.` Start the service with the Quick start command, then sign in at [Django admin](http://127.0.0.1:8000/admin/).
+
+![Django admin login](docs/images/project-api/admin-login.png)
+
+The other person first registers in the app. Under **Teams > Team memberships**, select their account and your team, then save.
+**You should see:** the new membership. That person can now open your team's projects.
+
+![Adding a team membership](docs/images/project-api/admin-team-membership.png)
+
+### Reset an environment's data
+
+These commands run only by hand, and nothing in setup, start, migrate, or the tests calls them. Stop every backend using the environment first. Each command must name its target, and it stops if the loaded `.env` points anywhere else.
+
+From `backend/`, with the Python environment active:
+
+```bash
+python manage.py reset_inventory --database-host HOST --database-name NAME --repository OWNER/NAME --branch BRANCH --output PRIVATE/manifest.json --backup PRIVATE/backup.dump --settings=config.settings_neon
+python manage.py reset_dialogue_data --database-host HOST --database-name NAME --repository OWNER/NAME --branch BRANCH --manifest PRIVATE/manifest.json --result PRIVATE/result.json --settings=config.settings_neon
+```
+
+**You should see:** `reset_inventory` lists the rows and exact files to clear, and changes nothing. `pg_dump` must be installed for the backup. Keep `PRIVATE` outside this repository, because the files list private project data. `reset_dialogue_data` shows what it would do until you add `--execute`. With `--execute`, it refuses a manifest made without `--backup`, or whose backup file is missing or has changed since.
+
+A reset removes the app's files in one ordinary commit, then clears accounts, teams, projects, positions, sessions, and admin logs in one transaction. It keeps the Git history, other files, the schema, migrations, permissions, and ID sequences. It stops if the database or branch changed after the inventory. To recover, restore the backup with `pg_restore` and run `restore_dialogue_files` with the same target and manifest: the two sides must match.
+
+After a reset nobody can sign in. Everyone registers again, and someone must run `createsuperuser` again, as in [Add another person to a team](#add-another-person-to-a-team), before anyone can use Django admin.
+
+### Old SQLite demo
+
+From `backend/`, with the Python environment active:
+
+```bash
+python manage.py migrate --settings=config.settings && python manage.py runserver 127.0.0.1:8000 --settings=config.settings
+```
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+python manage.py migrate --settings=config.settings
+python manage.py runserver 127.0.0.1:8000 --settings=config.settings
+```
+</details>
+
+**You should see:** the merchant editor at port 8000. This old demo will be removed later.
+
+### Current limitations
+
+- The parser uses a regex prototype. The planned Lark parser and full dialogue language are pending.
+- Save stores text and positions without running the parser. Its `diagnostics` stays empty; positions for deleted nodes remain stored.
+- Layout direction resets when a project reopens.
+- Browsers do not allow a custom dialog when a tab closes. Only **← Projects** offers save or discard; other ways of leaving use the browser's built-in prompt.
+- Write the first node of a new project in Markdown before adding more nodes through the graph.
+- **Log out** clears the cookie in that browser only. A token copied elsewhere stays valid until it expires.
+- The service targets local development and demos. Registration is open.

@@ -1,0 +1,92 @@
+{% extends "accounts/base.html" %}
+{% block title %}Log in · Dialogue editor{% endblock %}
+{% block content %}
+<section class="auth-panel panel">
+  <h1>Log in</h1>
+  <form id="login-form" method="post" action="{% url 'auth-login' %}" data-next="{{ next }}" data-csrf-cookie="{{ csrf_cookie_name }}" novalidate>
+    {% csrf_token %}
+    <p id="login-error" class="errorlist" role="alert" hidden></p>
+    <p>
+      <label for="id_email">Email:</label>
+      <input type="email" name="email" id="id_email" autocomplete="email" autofocus aria-describedby="email-error">
+      <span id="email-error" class="errorlist" hidden></span>
+    </p>
+    <p>
+      <label for="id_password">Password:</label>
+      <input type="password" name="password" id="id_password" autocomplete="current-password" aria-describedby="password-error">
+      <span id="password-error" class="errorlist" hidden></span>
+    </p>
+    <button class="primary" type="submit">Log in</button>
+  </form>
+  <p>New here? <a href="{% url 'accounts:register' %}">Create an account</a></p>
+</section>
+<script>
+  (() => {
+    // The login API checks the email and password. With our CSRF token it also sets the token cookie.
+    const form = document.getElementById("login-form");
+    const button = form.querySelector("button");
+    const formError = document.getElementById("login-error");
+    const fields = ["email", "password"].map(name => ({
+      name,
+      input: document.getElementById(`id_${name}`),
+      error: document.getElementById(`${name}-error`),
+    }));
+    // Read the cookie when sending, because a login in another tab starts a new CSRF token.
+    const csrfToken = () => {
+      const prefix = `${form.dataset.csrfCookie}=`;
+      const cookie = document.cookie.split(";").map(value => value.trim()).find(value => value.startsWith(prefix));
+      return cookie ? decodeURIComponent(cookie.slice(prefix.length)) : form.elements.csrfmiddlewaretoken.value;
+    };
+    const show = (element, text) => {
+      element.textContent = text;
+      element.hidden = !text;
+    };
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      show(formError, "");
+      for (const field of fields) {
+        show(field.error, "");
+        field.input.removeAttribute("aria-invalid");
+      }
+      button.disabled = true;
+      try {
+        let response;
+        try {
+          response = await fetch(form.action, {
+            method: "POST",
+            credentials: "same-origin",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+              "X-CSRFToken": csrfToken(),
+            },
+            body: JSON.stringify(Object.fromEntries(fields.map(field => [field.name, field.input.value]))),
+          });
+        } catch {
+          show(formError, "Could not reach the server. Try again.");
+          return;
+        }
+        if (response.ok) {
+          window.location.assign(form.dataset.next);
+          return;
+        }
+        const body = await response.json().catch(() => ({}));
+        const invalid = fields.filter(field => body[field.name]);
+        if (response.status === 400 && invalid.length) {
+          for (const field of invalid) {
+            show(field.error, [].concat(body[field.name]).join(" "));
+            field.input.setAttribute("aria-invalid", "true");
+          }
+          invalid[0].input.focus();
+        } else {
+          show(formError, typeof body.detail === "string"
+            ? body.detail : `The server had a problem (${response.status}). Try again.`);
+        }
+      } finally {
+        button.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}

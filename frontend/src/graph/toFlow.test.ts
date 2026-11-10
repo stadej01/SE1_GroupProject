@@ -66,7 +66,7 @@ test("US-29 AC1: a jump that ends its node renders solid", () => {
 test("US-29 AC1: a jump that is the node's only exit renders solid", () => {
   const only: DialogueGraph = {
     snapshot_id: "only-exit",
-    start: "A",
+    start_nodes: ["A"],
     diagnostics: [],
     nodes: ["A", "B"].map((id, i) => ({
       id,
@@ -290,7 +290,7 @@ test("many loop lanes remain outside a self-loop's node", () => {
 test("a 12,000-node conversation maps without recursion overflow", () => {
   const large: DialogueGraph = {
     snapshot_id: "large",
-    start: "0",
+    start_nodes: ["0"],
     diagnostics: [],
     nodes: Array.from({ length: 12_000 }, (_, i) => ({
       id: String(i),

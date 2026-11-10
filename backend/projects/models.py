@@ -29,7 +29,7 @@ class Project(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.github_path:
-            self.github_path = f"projects/{self.id}.md"
+            self.github_path = f"teams/{self.team_id}/projects/{self.id}.md"
         super().save(*args, **kwargs)
 
 

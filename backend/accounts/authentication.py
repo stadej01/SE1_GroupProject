@@ -5,6 +5,7 @@ from rest_framework.authentication import (
 )
 from rest_framework.exceptions import AuthenticationFailed
 
+from .token_cookie import user_from_cookie
 from .tokens import InvalidToken, user_from_token
 
 
@@ -28,6 +29,24 @@ class JWTAuthentication(BaseAuthentication):
             user = user_from_token(parts[1].decode())
         except (InvalidToken, UnicodeError):
             raise AuthenticationFailed("Invalid or expired token.")
+        return (user, None)
+
+    def authenticate_header(self, request):
+        return "Bearer"
+
+
+class JWTCookieAuthentication(SessionAuthentication):
+    """Signs a browser request in from the httpOnly token cookie.
+
+    Writes must carry the CSRF token, as with session login. A request with a
+    Bearer header is handled by JWTAuthentication first and skips this check.
+    """
+
+    def authenticate(self, request):
+        user = user_from_cookie(request)
+        if user is None:
+            return None
+        self.enforce_csrf(request)
         return (user, None)
 
     def authenticate_header(self, request):

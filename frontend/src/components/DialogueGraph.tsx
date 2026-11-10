@@ -51,6 +51,7 @@ interface Props {
   ) => void;
 
   onSelectEdge?: (edge: GraphEdge) => void;
+  onPaneClick?: () => void;
 
   onMoveNode: (
     id: string,
@@ -69,6 +70,7 @@ export function DialogueGraph({
   rotateLabels = false,
   onConnectNodes,
   onSelectEdge,
+  onPaneClick,
 }: Props) {
 
   // Convert the graph data into React Flow nodes and edges.
@@ -158,8 +160,13 @@ export function DialogueGraph({
           onSelectNode(node.data as GraphNode)
         }
 
-        onNodeDragStop={(_, node) =>
-          onMoveNode(node.id, node.position)
+        onPaneClick={onPaneClick}
+
+        onNodeDragStop={(_, _node, nodes) =>
+          nodes.forEach(node => onMoveNode(node.id, node.position))
+        }
+        onSelectionDragStop={(_, nodes) =>
+          nodes.forEach(node => onMoveNode(node.id, node.position))
         }
 
         nodesConnectable={Boolean(onConnectNodes)}
@@ -167,6 +174,8 @@ export function DialogueGraph({
         deleteKeyCode={null}
 
         fitView
+        // Keep the first view clear of the legend in the bottom-right corner.
+        fitViewOptions={{ padding: { top: "5%", right: "10%", bottom: "72px", left: "10%" } }}
         minZoom={0.1}
 
         key={`${graph.snapshot_id}-${vertical}-${rotateLabels}`}
@@ -182,43 +191,49 @@ export function DialogueGraph({
       )}
 
       <div className="dlg-legend" aria-label="Edge legend">
-        <svg width="36" height="8" aria-hidden>
-          <line
-            x1="0"
-            y1="4"
-            x2="36"
-            y2="4"
-            stroke="#3d5a80"
-            strokeWidth="2"
-          />
-        </svg>
-        <span>Player choice</span>
+        <span className="dlg-legend__item">
+          <svg width="28" height="8" aria-hidden>
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="#3d5a80"
+              strokeWidth="2"
+            />
+          </svg>
+          <span>Player choice</span>
+        </span>
 
-        <svg width="36" height="8" aria-hidden>
-          <line
-            x1="0"
-            y1="4"
-            x2="36"
-            y2="4"
-            stroke="#8a5a00"
-            strokeWidth="2"
-          />
-        </svg>
-        <span>Jump (ends the node)</span>
+        <span className="dlg-legend__item">
+          <svg width="28" height="8" aria-hidden>
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="#8a5a00"
+              strokeWidth="2"
+            />
+          </svg>
+          <span>Jump (ends the node)</span>
+        </span>
 
-        <svg width="36" height="8" aria-hidden>
-          <line
-            x1="0"
-            y1="4"
-            x2="36"
-            y2="4"
-            stroke="#8a5a00"
-            strokeWidth="2"
-            strokeDasharray="2 5"
-            strokeLinecap="round"
-          />
-        </svg>
-        <span>Jump (mid-dialogue)</span>
+        <span className="dlg-legend__item">
+          <svg width="28" height="8" aria-hidden>
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="#8a5a00"
+              strokeWidth="2"
+              strokeDasharray="2 5"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span>Jump (mid-dialogue)</span>
+        </span>
       </div>
 
       {graph.diagnostics.length > 0 && (

@@ -7,8 +7,6 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-!backend/editor/static/editor/dist/
-!backend/editor/static/editor/dist/**
 .pytest_cache/
 .ruff_cache/
 .coverage
@@ -17,6 +15,8 @@ htmlcov/
 *.sqlite3-journal
 
 node_modules/
+test-results/
+playwright-report/
 
 .DS_Store
 __MACOSX/
