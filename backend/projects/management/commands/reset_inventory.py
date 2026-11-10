@@ -6,7 +6,7 @@ import subprocess
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
-from projects.reset import Repository, ResetError, build_inventory, check_target
+from projects.reset import Repository, ResetError, build_inventory, check_target, file_sha256
 
 from ._reset_target import add_target_arguments, outside_repository, write_private_json
 
@@ -57,8 +57,11 @@ class Command(BaseCommand):
         except ResetError as error:
             raise CommandError(str(error)) from error
 
+        # reset_dialogue_data --execute checks that this backup is still there, unchanged.
+        manifest["backup"] = None
         if backup_path:
             dump_database(backup_path)
+            manifest["backup"] = {"path": str(backup_path), "sha256": file_sha256(backup_path)}
         write_private_json(manifest_path, manifest)
 
         self.stdout.write(f"Database: {options['database_host']} / {options['database_name']}")
@@ -79,3 +82,7 @@ class Command(BaseCommand):
         self.stdout.write(f"Manifest: {manifest_path}")
         if backup_path:
             self.stdout.write(f"Backup: {backup_path}")
+        else:
+            self.stdout.write(
+                self.style.WARNING("No backup: reset_dialogue_data --execute will refuse this manifest.")
+            )

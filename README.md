@@ -31,7 +31,7 @@ From the repository root, run:
 If PowerShell blocks the script, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` in this terminal, then repeat the command.
 </details>
 
-**You should see:** package installation completes, Vite reports `built in`, and the script ends with `Setup finished`. It needs no `.env` and touches no database. Run it again after dependencies change.
+**You should see:** package installation completes, Vite reports `built in`, and the script ends with `Setup finished`. It needs no `.env` and touches no database. Run it again after you pull new code and after dependencies change, because the built frontend is not in Git.
 
 ### 2. Create your Neon database
 
@@ -164,7 +164,7 @@ Everyone on a shared `.env` uses one database and one repository, each with thei
 
 ## Start again later
 
-From the repository root:
+If you pulled new code since the last run, run `./setup.sh` first, or `.\setup.ps1` on Windows. Then, from the repository root:
 
 ```bash
 ./start.sh
@@ -417,9 +417,11 @@ python manage.py reset_inventory --database-host HOST --database-name NAME --rep
 python manage.py reset_dialogue_data --database-host HOST --database-name NAME --repository OWNER/NAME --branch BRANCH --manifest PRIVATE/manifest.json --result PRIVATE/result.json --settings=config.settings_neon
 ```
 
-**You should see:** `reset_inventory` lists the rows and exact files to clear, and changes nothing. `pg_dump` must be installed for the backup. Keep `PRIVATE` outside this repository, because the files list private project data. `reset_dialogue_data` shows what it would do until you add `--execute`.
+**You should see:** `reset_inventory` lists the rows and exact files to clear, and changes nothing. `pg_dump` must be installed for the backup. Keep `PRIVATE` outside this repository, because the files list private project data. `reset_dialogue_data` shows what it would do until you add `--execute`. With `--execute`, it refuses a manifest made without `--backup`, or whose backup file is missing or has changed since.
 
 A reset removes the app's files in one ordinary commit, then clears accounts, teams, projects, positions, sessions, and admin logs in one transaction. It keeps the Git history, other files, the schema, migrations, permissions, and ID sequences. It stops if the database or branch changed after the inventory. To recover, restore the backup with `pg_restore` and run `restore_dialogue_files` with the same target and manifest: the two sides must match.
+
+After a reset nobody can sign in. Everyone registers again, and someone must run `createsuperuser` again, as in [Add another person to a team](#add-another-person-to-a-team), before anyone can use Django admin.
 
 ### Old SQLite demo
 

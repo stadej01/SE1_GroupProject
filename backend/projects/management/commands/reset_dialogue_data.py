@@ -5,7 +5,7 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
-from projects.reset import Repository, ResetError, check_target, reset
+from projects.reset import Repository, ResetError, check_backup, check_target, reset
 
 from ._reset_target import add_target_arguments, outside_repository, write_private_json
 
@@ -39,6 +39,10 @@ class Command(BaseCommand):
                     f"{len(manifest['files_to_delete'])} files and clear "
                     f"{', '.join(manifest['tables_to_clear'])}. Add --execute to do it."
                 )
+                try:
+                    check_backup(manifest)
+                except ResetError as error:
+                    self.stdout.write(self.style.WARNING(f"--execute will refuse: {error}"))
                 return
             result = reset(Repository(), manifest)
         except ResetError as error:

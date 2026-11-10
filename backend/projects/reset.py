@@ -4,8 +4,10 @@ Only the management commands that name a target explicitly use this module.
 The app, its setup and start scripts, and its migrations never do.
 """
 
+import hashlib
 import json
 import re
+from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -223,6 +225,28 @@ def build_inventory(repository):
     }
 
 
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as backup:
+        for chunk in iter(lambda: backup.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def check_backup(manifest):
+    """A reset deletes every account, so it needs the inventory's backup, unchanged."""
+    backup = manifest.get("backup")
+    if not backup:
+        raise ResetError("The manifest records no backup. Run reset_inventory again with --backup.")
+    path = Path(backup["path"])
+    if not path.is_file():
+        raise ResetError(f"The backup {path} is missing. Run reset_inventory again with --backup.")
+    if file_sha256(path) != backup["sha256"]:
+        raise ResetError(
+            f"The backup {path} changed after the inventory. Run reset_inventory again with --backup."
+        )
+
+
 def _check_still_matches(manifest, current):
     if current != manifest:
         different = sorted(key for key in manifest if manifest[key] != current.get(key))
@@ -282,8 +306,13 @@ def clear_database(manifest):
 
 
 def reset(repository, manifest):
-    """Re-check, delete the files, then clear the database, stopping at any failure."""
-    _check_still_matches(manifest, build_inventory(repository))
+    """Check the backup, re-check the target, delete the files, then clear the database.
+
+    Any failure stops the reset there.
+    """
+    check_backup(manifest)
+    inventory = {key: value for key, value in manifest.items() if key != "backup"}
+    _check_still_matches(inventory, build_inventory(repository))
     commit = delete_files(repository, manifest)
     database = clear_database(manifest)
     return {

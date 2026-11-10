@@ -17,9 +17,12 @@ from .reset import (
     RESET_COMMIT_MESSAGE,
     ResetError,
     _check_still_matches,
+    check_backup,
     check_target,
     classify_files,
     delete_files,
+    file_sha256,
+    reset,
 )
 
 UUID = "3f2a9c1b-7d10-4e55-9aca-7749e5f6bba1"
@@ -239,3 +242,134 @@ class CommandSafetyTests(SimpleTestCase):
                 )
 
         reset.assert_not_called()
+
+
+class BackupRequiredTests(SimpleTestCase):
+    """A reset deletes every account, so --execute needs the inventory's backup."""
+
+    INVENTORY = {
+        "head": "a" * 40,
+        "tables": {"accounts_user": 2},
+        "files_to_delete": {TEAM_FILE: file()},
+        "unclassified_tables": [],
+        "unapplied_migrations": [],
+    }
+    TARGET = CommandSafetyTests.TARGET
+
+    def setUp(self):
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
+        self.backup = self.directory / "backup.dump"
+        self.backup.write_bytes(b"pg_dump output")
+
+    def manifest(self, **backup):
+        recorded = {"path": str(self.backup), "sha256": file_sha256(self.backup), **backup}
+        return {**self.INVENTORY, "backup": recorded}
+
+    def steps(self):
+        """The reset's real work, replaced so the test can see whether it ran."""
+        return (
+            mock.patch("projects.reset.build_inventory", return_value=dict(self.INVENTORY)),
+            mock.patch("projects.reset.delete_files", return_value="c" * 40),
+            mock.patch("projects.reset.clear_database", return_value={"tables": {}, "sequences": {}}),
+        )
+
+    def assert_refused(self, manifest, message):
+        inventory, delete, clear = self.steps()
+        with inventory as read, delete as deleted, clear as cleared:
+            with self.assertRaisesMessage(ResetError, message):
+                reset(mock.Mock(), manifest)
+        read.assert_not_called()
+        deleted.assert_not_called()
+        cleared.assert_not_called()
+
+    def test_no_recorded_backup_stops_before_anything_changes(self):
+        for manifest in (dict(self.INVENTORY), {**self.INVENTORY, "backup": None}):
+            with self.subTest(backup=manifest.get("backup", "absent")):
+                self.assert_refused(manifest, "records no backup")
+
+    def test_a_missing_or_changed_backup_stops_before_anything_changes(self):
+        cases = {
+            "missing": ({"path": str(self.directory / "gone.dump")}, "is missing"),
+            "changed": ({"sha256": "0" * 64}, "changed after the inventory"),
+        }
+        for name, (change, message) in cases.items():
+            with self.subTest(name=name):
+                self.assert_refused(self.manifest(**change), message)
+
+    def test_the_recorded_backup_lets_the_reset_run(self):
+        inventory, delete, clear = self.steps()
+        with inventory, delete as deleted, clear as cleared:
+            result = reset(mock.Mock(), self.manifest())
+        deleted.assert_called_once()
+        cleared.assert_called_once()
+        self.assertEqual(result["reset_commit"], "c" * 40)
+
+    def call_reset_command(self, manifest, **options):
+        manifest_path = self.directory / "manifest.json"
+        manifest_path.write_text(json.dumps({**manifest, "tables_to_clear": ["accounts_user"]}))
+        output = StringIO()
+        with mock.patch("projects.management.commands.reset_dialogue_data.check_target"):
+            call_command(
+                "reset_dialogue_data",
+                manifest=str(manifest_path),
+                result=str(self.directory / "result.json"),
+                stdout=output,
+                **self.TARGET,
+                **options,
+            )
+        return output.getvalue()
+
+    def test_execute_without_a_backup_is_refused_by_the_command(self):
+        inventory, delete, clear = self.steps()
+        with inventory, delete as deleted, clear as cleared:
+            with self.assertRaisesMessage(CommandError, "records no backup"):
+                self.call_reset_command(self.INVENTORY, execute=True)
+        deleted.assert_not_called()
+        cleared.assert_not_called()
+
+    def test_preview_without_a_backup_still_works_and_warns(self):
+        with mock.patch("projects.management.commands.reset_dialogue_data.reset") as run:
+            output = self.call_reset_command(self.INVENTORY)
+        run.assert_not_called()
+        self.assertIn("Add --execute", output)
+        self.assertIn("--execute will refuse", output)
+
+    def call_inventory_command(self, **options):
+        inventory = {
+            **self.INVENTORY,
+            "tables_to_clear": [],
+            "files_to_keep": {},
+            "saved_paths_missing_from_branch": [],
+        }
+        command = "projects.management.commands.reset_inventory"
+        output = StringIO()
+        with (
+            mock.patch(f"{command}.check_target"),
+            mock.patch(f"{command}.Repository"),
+            mock.patch(f"{command}.build_inventory", return_value=inventory),
+            mock.patch(
+                f"{command}.dump_database",
+                side_effect=lambda path: path.write_bytes(b"pg_dump output"),
+            ),
+        ):
+            call_command(
+                "reset_inventory",
+                output=str(self.directory / "manifest.json"),
+                stdout=output,
+                **self.TARGET,
+                **options,
+            )
+        return json.loads((self.directory / "manifest.json").read_text()), output.getvalue()
+
+    def test_inventory_records_the_backup_path_and_hash(self):
+        backup = (self.directory / "new-backup.dump").resolve()
+        manifest, _ = self.call_inventory_command(backup=str(backup))
+        self.assertEqual(manifest["backup"], {"path": str(backup), "sha256": file_sha256(backup)})
+        check_backup(manifest)
+
+    def test_inventory_without_backup_records_none_and_warns(self):
+        manifest, output = self.call_inventory_command()
+        self.assertIsNone(manifest["backup"])
+        self.assertIn("--execute will refuse this manifest", output)
