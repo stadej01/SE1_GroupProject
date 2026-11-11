@@ -67,6 +67,7 @@ test("US-29 AC1: a jump that is the node's only exit renders solid", () => {
   const only: DialogueGraph = {
     snapshot_id: "only-exit",
     start_nodes: ["A"],
+    end_nodes: [],
     diagnostics: [],
     nodes: ["A", "B"].map((id, i) => ({
       id,
@@ -221,6 +222,16 @@ test("multiple conversation entry nodes are all marked", () => {
   );
 });
 
+test("designated end nodes are marked in the graph", () => {
+  const endNodes = ["Node_Exit"];
+  const { nodes: mapped } = toFlow({ ...graph, end_nodes: endNodes });
+
+  assert.deepEqual(
+    mapped.filter((node) => node.data.is_end).map((node) => node.id),
+    endNodes
+  );
+});
+
 
 test("disconnected components and isolated nodes are retained", () => {
   const isolated: DialogueGraph = { ...graph, edges: [] };
@@ -258,6 +269,7 @@ test("node height reserves space for long dialogue that wraps in the graph", () 
     ],
     edges: [],
     start_nodes: [],
+    end_nodes: [],
   };
   const boxes = layout(overlapGraph, new Set());
   const first = boxes.get(longNode.id)!;
@@ -291,6 +303,7 @@ test("a 12,000-node conversation maps without recursion overflow", () => {
   const large: DialogueGraph = {
     snapshot_id: "large",
     start_nodes: ["0"],
+    end_nodes: [],
     diagnostics: [],
     nodes: Array.from({ length: 12_000 }, (_, i) => ({
       id: String(i),

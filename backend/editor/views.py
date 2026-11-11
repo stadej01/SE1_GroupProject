@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
-from dialogue_graph import GraphValidationError, build_graph, parse_markdown_to_ast
+from dialogue_graph import GraphValidationError, build_graph, check_continuity, parse_markdown_to_ast
 from .assets import frontend_assets
 from .models import Draft
 
@@ -52,7 +52,8 @@ def index(request):
         defaults={"markdown_source": DEMO_SOURCE.read_text(encoding="utf-8")})
     return render(request, "editor/index.html", {"markdown_source": draft.markdown_source,
         "revision": draft.revision, "assets": frontend_assets(), "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
-        "sync_url": reverse("editor:sync"), "save_url": reverse("editor:save")})
+        "sync_url": reverse("editor:sync"), "save_url": reverse("editor:save"),
+        "continuity_url": reverse("editor:continuity")})
 
 @never_cache
 @require_POST
@@ -65,6 +66,20 @@ def sync(request):
     except GraphValidationError as exc:
         return JsonResponse({"ok": False, "diagnostics": exc.diagnostics}, status=422)
     return JsonResponse({"ok": True, "graph": graph, "diagnostics": []})
+
+
+@never_cache
+@require_POST
+def continuity(request):
+    payload, error = _payload(request)
+    if error is not None:
+        return error
+    result = check_continuity(parse_markdown_to_ast(payload["markdown_source"]))
+    return JsonResponse({
+        "ok": True,
+        "continuity_status": result["status"],
+        "issues": result["issues"],
+    })
 
 @never_cache
 @require_http_methods(["PUT"])

@@ -5,7 +5,7 @@ import { DialogueGraph } from "./components/DialogueGraph";
 import { EditingNodeContext } from "./components/DialogueNode";
 import { sourceRange } from "./editor/source";
 import { patchNodeSource } from "./editor/patchNode";
-import { appendNode, appendConnection, removeConnection, locateNode, setStartNodes } from "./editor/graphEdits";
+import { appendNode, appendConnection, removeConnection, locateNode, setStartNodes, setEndNodes } from "./editor/graphEdits";
 import { createStore, initializeEditor } from "./project/store";
 import { applyLayout } from "./project/layout";
 import { readCsrfToken } from "./project/csrf";
@@ -56,6 +56,11 @@ let savedSource = source.value;
 let graphSource: string | null = null;
 let generation = 0;
 let parseRequest: AbortController | undefined;
+let continuityRequest: AbortController | undefined;
+let continuityGeneration = 0;
+let lastContinuitySource: string | null = null;
+let continuityButtonElement: HTMLButtonElement | null = null;
+let continuityStatusElement: HTMLElement | null = null;
 let selectedNode: GraphNode | null = null;
 let editingGraph: Graph | null = null;
 let pendingMarkdown: string | null = null;
@@ -67,6 +72,16 @@ let positionVersion = 0;
 let savedPositionVersion = 0;
 let activeSave: Promise<boolean> | null = null;
 let leavingAfterSave = false;
+function invalidateContinuity() {
+  continuityGeneration++;
+  continuityRequest?.abort();
+  continuityRequest = undefined;
+  if (continuityButtonElement) continuityButtonElement.disabled = false;
+  if (continuityStatusElement && lastContinuitySource !== null) {
+    continuityStatusElement.textContent = "Markdown changed — check continuity again";
+  }
+  lastContinuitySource = null;
+}
 function hasUnsavedChanges() {
   return isDirty({ source: source.value, savedSource, pendingMarkdown, project: store.project,
     positionVersion, savedPositionVersion });
@@ -77,6 +92,7 @@ function updateSaveStatus(cleanLabel = "No unsaved changes") {
   }
 }
 function graphChanged(message: string) {
+  invalidateContinuity();
   parseStatus.textContent = message + " — press Parse to sync Markdown";
   graphCount.textContent = `${editingGraph?.nodes.length ?? 0} nodes · ${editingGraph?.edges.length ?? 0} connections · unsynced GUI edits`;
   graphRenderVersion++;
@@ -188,18 +204,23 @@ function selectNode(node: GraphNode) {
   showNodeEditor(node);
 }
 
-function showDiagnostics(diagnostics: Diagnostic[]) {
+function showDiagnostics(diagnostics: Diagnostic[], mode: "parse" | "continuity" = "parse") {
   diagnosticList.replaceChildren();
   diagnosticPanel.hidden = diagnostics.length === 0;
   const hasErrors = diagnostics.some(item => item.severity === "error");
   diagnosticPanel.dataset.severity = hasErrors ? "error" : "warning";
-  element("diagnostics-heading").textContent = hasErrors ? "Markdown needs attention" : "Starting node required";
-  element("diagnostics-help").textContent = hasErrors
-    ? `You can still save this ${store.contentLabel}. Fix these issues before generating the graph.`
-    : "Select a starting node before validating or playtesting the dialogue.";
+  element("diagnostics-heading").textContent = mode === "continuity"
+    ? "Continuity issues found"
+    : hasErrors ? "Markdown needs attention" : "Starting node required";
+  element("diagnostics-help").textContent = mode === "continuity"
+    ? "Review these branches and logic paths before runtime."
+    : hasErrors
+      ? `You can still save this ${store.contentLabel}. Fix these issues before generating the graph.`
+      : "Select a starting node before validating or playtesting the dialogue.";
   for (const diagnostic of diagnostics) {
     const li = document.createElement("li");
-    const text = `${diagnostic.line ? `Line ${diagnostic.line}: ` : ""}${diagnostic.message}`;
+    const node = mode === "continuity" && diagnostic.node_id ? `${diagnostic.node_id}: ` : "";
+    const text = `${diagnostic.line ? `Line ${diagnostic.line}: ` : ""}${node}${diagnostic.message}`;
     if (diagnostic.line) {
       const button = document.createElement("button");
       button.type = "button";
@@ -262,6 +283,54 @@ async function parse(warnAboutStart = true) {
   }
 }
 
+async function checkContinuity() {
+  const button = continuityButtonElement;
+  const status = continuityStatusElement;
+  if (!button || !status || button.disabled) return;
+
+  const submittedSource = pendingMarkdown ?? source.value;
+  const requestId = ++continuityGeneration;
+  continuityRequest?.abort();
+  const controller = new AbortController();
+  continuityRequest = controller;
+  button.disabled = true;
+  status.textContent = "Checking continuity…";
+
+  try {
+    const reply = await request(app.dataset.continuityUrl!, "POST", {
+      markdown_source: submittedSource,
+    }, controller.signal);
+    if (requestId !== continuityGeneration) return;
+    if ((pendingMarkdown ?? source.value) !== submittedSource) {
+      invalidateContinuity();
+      return;
+    }
+    if (reply.status === 401 || reply.status === 403) {
+      const error = new ProjectRequestError(reply.status, reply.status === 403 ? "CSRF Failed" : reply.detail);
+      showErrorNotice(status, projectErrorNotice(error), app.dataset.loginUrl);
+      return;
+    }
+    if (!reply.ok || !reply.continuity_status || !Array.isArray(reply.issues)) {
+      status.textContent = reply.diagnostics?.map(item => item.message).join(" ") || "Continuity check failed.";
+      return;
+    }
+
+    lastContinuitySource = submittedSource;
+    showDiagnostics(reply.issues, "continuity");
+    status.textContent = reply.continuity_status === "clean"
+      ? "Continuity check passed: no issues"
+      : `Continuity check found ${reply.issues.length} issue${reply.issues.length === 1 ? "" : "s"}`;
+  } catch (error) {
+    if (requestId !== continuityGeneration) return;
+    status.textContent = error instanceof Error ? `Continuity check failed: ${error.message}` : "Continuity check failed.";
+  } finally {
+    if (requestId === continuityGeneration) {
+      button.disabled = false;
+      continuityRequest = undefined;
+    }
+  }
+}
+
 // A second request joins the save that is already running.
 function save(): Promise<boolean> {
   activeSave ??= submitSave().finally(() => { activeSave = null; });
@@ -306,6 +375,7 @@ async function saveBeforeLeaving(): Promise<boolean> {
 }
 
 source.addEventListener("input", () => {
+  invalidateContinuity();
   generation++;
   parseRequest?.abort();
   parseButton.disabled = false;
@@ -419,7 +489,8 @@ editForm.addEventListener("submit", event => {
 // Graph editing toolbar. All operations use the same pending Markdown buffer.
 const toolbar = document.createElement("div");
 toolbar.className = "graph-edit-toolbar";
-toolbar.innerHTML = `<button type="button" id="new-graph-node">+ New node</button><details class="toolbar-menu starting-node-picker"><summary id="starting-node-summary">Starting nodes (none)</summary><fieldset id="starting-node-list" class="toolbar-panel"><legend>Select conversation entry nodes</legend></fieldset></details><details class="toolbar-menu"><summary id="connections-summary">Connections (0)</summary><div class="toolbar-panel connections-panel"><label>From <input id="connection-from" list="graph-node-options" aria-label="Connection source node" placeholder="Search nodes" autocomplete="off"></label><label>To <input id="connection-to" list="graph-node-options" aria-label="Connection target node" placeholder="Search nodes" autocomplete="off"></label><datalist id="graph-node-options"></datalist><label class="panel-row">Type <select id="connection-kind"><option value="choice">Player choice</option><option value="jump">Automatic jump</option></select></label><button type="button" id="add-graph-connection" class="panel-row">+ Connect nodes</button><span class="toolbar-note panel-row">Drag from a node's output handle to another node's input to connect.</span><hr class="panel-row"><label class="panel-row">Connections <select id="connection-delete" aria-label="Select connection to delete"></select></label><button type="button" id="delete-graph-connection" class="panel-row">Delete connection</button></div></details><details class="toolbar-menu"><summary id="view-summary">View</summary><div class="toolbar-panel view-panel"><label>Layout <select id="graph-layout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><label class="checkbox-row"><input type="checkbox" id="rotate-edge-labels"> Rotate connector text 90°</label></div></details>`;
+toolbar.innerHTML = `<button type="button" id="new-graph-node">+ New node</button><button type="button" id="check-continuity-button">Check continuity</button><span id="continuity-status" role="status" aria-live="polite"></span><details class="toolbar-menu starting-node-picker"><summary id="starting-node-summary">Starting nodes (none)</summary><fieldset id="starting-node-list" class="toolbar-panel"><legend>Select conversation entry nodes</legend></fieldset></details><details class="toolbar-menu"><summary id="connections-summary">Connections (0)</summary><div class="toolbar-panel connections-panel"><label>From <input id="connection-from" list="graph-node-options" aria-label="Connection source node" placeholder="Search nodes" autocomplete="off"></label><label>To <input id="connection-to" list="graph-node-options" aria-label="Connection target node" placeholder="Search nodes" autocomplete="off"></label><datalist id="graph-node-options"></datalist><label class="panel-row">Type <select id="connection-kind"><option value="choice">Player choice</option><option value="jump">Automatic jump</option></select></label><button type="button" id="add-graph-connection" class="panel-row">+ Connect nodes</button><span class="toolbar-note panel-row">Drag from a node's output handle to another node's input to connect.</span><hr class="panel-row"><label class="panel-row">Connections <select id="connection-delete" aria-label="Select connection to delete"></select></label><button type="button" id="delete-graph-connection" class="panel-row">Delete connection</button></div></details><details class="toolbar-menu"><summary id="view-summary">View</summary><div class="toolbar-panel view-panel"><label>Layout <select id="graph-layout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><label class="checkbox-row"><input type="checkbox" id="rotate-edge-labels"> Rotate connector text 90°</label></div></details>`;
+toolbar.querySelector(".starting-node-picker")!.insertAdjacentHTML("afterend", `<details class="toolbar-menu end-node-picker"><summary id="end-node-summary">End nodes (none)</summary><fieldset id="end-node-list" class="toolbar-panel"><legend>Select valid dialogue endings</legend></fieldset></details>`);
 function refreshConnectionOptions() {
   const from = toolbar.querySelector<HTMLInputElement>("#connection-from")!;
   const to = toolbar.querySelector<HTMLInputElement>("#connection-to")!;
@@ -441,6 +512,19 @@ function refreshConnectionOptions() {
   }));
   toolbar.querySelector<HTMLElement>("#starting-node-summary")!.textContent =
     `Starting nodes (${startNodes.size || "none"})`;
+  const endList = toolbar.querySelector<HTMLFieldSetElement>("#end-node-list")!;
+  const endNodes = new Set(editingGraph?.end_nodes ?? []);
+  endList.replaceChildren(...ids.map(id => {
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.value = id;
+    checkbox.checked = endNodes.has(id);
+    label.append(checkbox, document.createTextNode(id));
+    return label;
+  }));
+  toolbar.querySelector<HTMLElement>("#end-node-summary")!.textContent =
+    `End nodes (${endNodes.size || "none"})`;
   if (!ids.includes(from.value)) from.value = ids[0] ?? "";
   if (!ids.includes(to.value)) to.value = ids.find(id => id !== from.value) ?? ids[0] ?? "";
   const del = toolbar.querySelector<HTMLSelectElement>("#connection-delete")!;
@@ -469,6 +553,9 @@ function createConnection(from: string, to: string, kind: "choice" | "jump", lab
 }
 element("graph-panel-header").append(toolbar);
 mountToolbarMenus(toolbar);
+continuityButtonElement = toolbar.querySelector<HTMLButtonElement>("#check-continuity-button")!;
+continuityStatusElement = toolbar.querySelector<HTMLElement>("#continuity-status")!;
+continuityButtonElement.addEventListener("click", () => { void checkContinuity(); });
 toolbar.querySelector<HTMLButtonElement>("#add-graph-connection")!.addEventListener("click", () => {
   const from = toolbar.querySelector<HTMLInputElement>("#connection-from")!.value;
   const to = toolbar.querySelector<HTMLInputElement>("#connection-to")!.value;
@@ -489,6 +576,18 @@ toolbar.querySelector<HTMLFieldSetElement>("#starting-node-list")!.addEventListe
     graphChanged(starts.length ? `${starts.length} starting node${starts.length === 1 ? "" : "s"} selected` : "Starting nodes cleared");
   } catch (error) {
     window.alert(error instanceof Error ? error.message : "Unable to update starting node.");
+    refreshConnectionOptions();
+  }
+});
+toolbar.querySelector<HTMLFieldSetElement>("#end-node-list")!.addEventListener("change", () => {
+  if (!editingGraph || graphSource !== source.value) return;
+  const ends = [...toolbar.querySelectorAll<HTMLInputElement>("#end-node-list input:checked")].map(input => input.value);
+  try {
+    pendingMarkdown = setEndNodes(pendingMarkdown ?? source.value, ends);
+    editingGraph = { ...editingGraph, end_nodes: ends };
+    graphChanged(ends.length ? `${ends.length} end node${ends.length === 1 ? "" : "s"} selected` : "End nodes cleared");
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : "Unable to update end nodes.");
     refreshConnectionOptions();
   }
 });

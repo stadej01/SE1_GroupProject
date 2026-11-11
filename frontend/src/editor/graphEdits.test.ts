@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { appendNode, setStartNodes } from "./graphEdits";
+import { appendNode, setEndNodes, setStartNodes } from "./graphEdits";
 
 test("appends an isolated node with its requested ID", () => {
   const updated = appendNode("# A\nNarrator: Hello.\n", "B", "Narrator", "Goodbye.");
@@ -18,4 +18,16 @@ test("sets multiple starting node directives and can clear them", () => {
 
 test("rejects a start ID that is not a node in the draft", () => {
   assert.throws(() => setStartNodes("# A\n", ["Missing"]), /does not exist/);
+});
+
+test("sets multiple end-node directives, preserves starts, and can clear them", () => {
+  const source = "<!-- start: A -->\n# A\nNarrator: Hello.\n\n# B\nNarrator: Goodbye.\n";
+  const ended = setEndNodes(source, ["B", "A"]);
+  assert.equal(ended, "<!-- end: B -->\n<!-- end: A -->\n" + source);
+  assert.equal(setEndNodes(ended, ["A"]), "<!-- end: A -->\n" + source);
+  assert.equal(setEndNodes(ended, []), source);
+});
+
+test("rejects an end ID that is not a node in the draft", () => {
+  assert.throws(() => setEndNodes("# A\n", ["Missing"]), /does not exist/);
 });
