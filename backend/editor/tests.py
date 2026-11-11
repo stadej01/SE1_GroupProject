@@ -31,6 +31,10 @@ class EditorTests(TestCase):
         return self.client.post(reverse("editor:sync"), {"markdown_source": source},
             content_type="application/json", HTTP_X_CSRFTOKEN=self.token)
 
+    def post_continuity(self, source):
+        return self.client.post(reverse("editor:continuity"), {"markdown_source": source},
+            content_type="application/json", HTTP_X_CSRFTOKEN=self.token)
+
     def save_draft(self, source, revision=0):
         return self.client.put(reverse("editor:save"),
             {"markdown_source": source, "revision": revision}, content_type="application/json",
@@ -75,6 +79,32 @@ class EditorTests(TestCase):
         self.assertEqual([node["id"] for node in graph["nodes"]], ["A", "B"])
         self.assertEqual(graph["edges"][0]["target"], "B")
         self.assertEqual(Draft.objects.get().markdown_source, original)
+
+    def test_continuity_endpoint_reports_missing_destination_without_blocking_result(self):
+        result = self.post_continuity('<!-- start: A -->\n# A\n* "Go" -> Missing\n')
+
+        self.assertEqual(result.status_code, 200)
+        payload = result.json()
+        self.assertEqual(payload["continuity_status"], "issues")
+        self.assertTrue(any(
+            issue["node_id"] == "A" and "Missing" in issue["message"]
+            for issue in payload["issues"]
+        ))
+
+    def test_continuity_endpoint_returns_clean_status(self):
+        source = '<!-- start: A -->\n<!-- end: B -->\n# A\n* "Go" -> B\n# B\nNarrator: End.\n'
+
+        self.assertEqual(self.post_continuity(source).json()["continuity_status"], "clean")
+
+    def test_continuity_endpoint_reports_unmarked_terminal_node(self):
+        source = '<!-- start: A -->\n# A\n* "Go" -> B\n# B\nNarrator: End.\n'
+
+        payload = self.post_continuity(source).json()
+        self.assertEqual(payload["continuity_status"], "issues")
+        self.assertTrue(any(
+            issue["node_id"] == "B" and "not marked as an end node" in issue["message"]
+            for issue in payload["issues"]
+        ))
 
     def test_all_invalid_inputs_return_diagnostics_without_graph(self):
         for source in ["", "# A\n???", "# A\n# A", '# A\n* "Go" -> Missing']:

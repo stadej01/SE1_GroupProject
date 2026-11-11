@@ -6,7 +6,9 @@
 }
 .dlg-node__id { min-width: 0; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dlg-node__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dlg-node__markers { display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .dlg-node__start { flex: none; color: #176345; background: #e2f4e9; border-radius: 4px; padding: 2px 5px; font-size: 9px; font-weight: 700; letter-spacing: .5px; }
+.dlg-node__end { flex: none; color: #8f2f28; background: #fde8e7; border-radius: 4px; padding: 2px 5px; font-size: 9px; font-weight: 700; letter-spacing: .5px; }
 .dlg-node__preview { font-size: 12px; line-height: 19px; color: #4b5563;
   white-space: pre-wrap; overflow-wrap: anywhere; }
 .dlg-node__line + .dlg-node__line { margin-top: 5px; }

@@ -4,7 +4,7 @@ import type { DialogueGraph } from "../graph/contract";
 import { applyLayout, fillMissingPositions, readPositions, saveLayout, writeLayout } from "./layout";
 
 const graph: DialogueGraph = {
-  snapshot_id: "test", start_nodes: [], diagnostics: [],
+  snapshot_id: "test", start_nodes: [], end_nodes: [], diagnostics: [],
   nodes: ["A", "B"].map(id => ({ id, category: null, color: null, preview: "Hello", source_line: 1, source_end_line: 2 })),
   edges: [{ id: "A-B", source: "A", target: "B", kind: "jump", label: null, condition: null, source_line: 2 }],
 };

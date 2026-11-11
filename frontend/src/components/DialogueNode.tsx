@@ -57,7 +57,10 @@ export function DialogueNode({ data, selected }: NodeProps<DialogueFlowNode>) {
         >
           {data.id}
         </div>
-        {data.is_start && <span className="dlg-node__start">START</span>}
+        <div className="dlg-node__markers">
+          {data.is_start && <span className="dlg-node__start">START</span>}
+          {data.is_end && <span className="dlg-node__end">END</span>}
+        </div>
       </div>
 
       <div className="dlg-node__body">
