@@ -17,6 +17,7 @@ import { createRequest } from "./project/request";
 import { mountPanelDivider } from "./project/panelDivider";
 import { mountToolbarMenus } from "./project/toolbarMenus";
 import { mountLeaveDialog } from "./project/leaveDialog";
+import { deleteSelection, inspectDeletion } from "./editor/deleteSelection";
 import "./editor.css";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -57,6 +58,8 @@ let graphSource: string | null = null;
 let generation = 0;
 let parseRequest: AbortController | undefined;
 let selectedNode: GraphNode | null = null;
+let selectedNodeIds = new Set<string>();
+let selectedEdgeIds = new Set<string>();
 let editingGraph: Graph | null = null;
 let pendingMarkdown: string | null = null;
 let selectedNodeId: string | null = null;
@@ -87,9 +90,14 @@ function renderGraph() {
   refreshConnectionOptions();
   if (!editingGraph) return;
   root.render(<EditingNodeContext.Provider value={nodePanel.hidden ? null : selectedNodeId}><DialogueGraph key={graphRenderVersion + (verticalLayout ? 100000 : 0) + (rotateLabels ? 200000 : 0)} graph={editingGraph} savedPositions={positions}
-    vertical={verticalLayout} rotateLabels={rotateLabels}
-    onSelectEdge={selectEdge}
-    onPaneClick={dismissNodeEditor}
+  vertical={verticalLayout} rotateLabels={rotateLabels}
+  onSelectEdge={selectEdge}
+  onSelectionChange={(nodes, edges) => {
+    selectedNodeIds = new Set(nodes);
+    selectedEdgeIds = new Set(edges);
+    refreshDeleteButton();
+  }}
+  onPaneClick={dismissNodeEditor}
     onSelectNode={selectNode} onMoveNode={(id, position) => {
       positions.set(id, { ...position });
       positionVersion++;
@@ -420,6 +428,27 @@ editForm.addEventListener("submit", event => {
 const toolbar = document.createElement("div");
 toolbar.className = "graph-edit-toolbar";
 toolbar.innerHTML = `<button type="button" id="new-graph-node">+ New node</button><details class="toolbar-menu starting-node-picker"><summary id="starting-node-summary">Starting nodes (none)</summary><fieldset id="starting-node-list" class="toolbar-panel"><legend>Select conversation entry nodes</legend></fieldset></details><details class="toolbar-menu"><summary id="connections-summary">Connections (0)</summary><div class="toolbar-panel connections-panel"><label>From <input id="connection-from" list="graph-node-options" aria-label="Connection source node" placeholder="Search nodes" autocomplete="off"></label><label>To <input id="connection-to" list="graph-node-options" aria-label="Connection target node" placeholder="Search nodes" autocomplete="off"></label><datalist id="graph-node-options"></datalist><label class="panel-row">Type <select id="connection-kind"><option value="choice">Player choice</option><option value="jump">Automatic jump</option></select></label><button type="button" id="add-graph-connection" class="panel-row">+ Connect nodes</button><span class="toolbar-note panel-row">Drag from a node's output handle to another node's input to connect.</span><hr class="panel-row"><label class="panel-row">Connections <select id="connection-delete" aria-label="Select connection to delete"></select></label><button type="button" id="delete-graph-connection" class="panel-row">Delete connection</button></div></details><details class="toolbar-menu"><summary id="view-summary">View</summary><div class="toolbar-panel view-panel"><label>Layout <select id="graph-layout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><label class="checkbox-row"><input type="checkbox" id="rotate-edge-labels"> Rotate connector text 90°</label></div></details>`;
+toolbar.insertAdjacentHTML(
+  "afterbegin",
+  `<button type="button" id="delete-graph-selection" disabled>
+    Delete selected
+  </button>`
+);
+
+function refreshDeleteButton() {
+  const button = toolbar.querySelector<HTMLButtonElement>(
+    "#delete-graph-selection"
+  );
+
+  if (!button) return;
+
+  const count = selectedNodeIds.size + selectedEdgeIds.size;
+
+  button.disabled = count === 0;
+  button.textContent = count
+    ? `Delete selected (${count})`
+    : "Delete selected";
+}
 function refreshConnectionOptions() {
   const from = toolbar.querySelector<HTMLInputElement>("#connection-from")!;
   const to = toolbar.querySelector<HTMLInputElement>("#connection-to")!;

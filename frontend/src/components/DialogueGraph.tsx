@@ -57,6 +57,11 @@ interface Props {
     id: string,
     position: { x: number; y: number }
   ) => void;
+
+  onSelectionChange?: (
+    nodeIds: string[],
+     edgeIds: string[]
+    ) => void;
 }
 
 
@@ -70,6 +75,7 @@ export function DialogueGraph({
   rotateLabels = false,
   onConnectNodes,
   onSelectEdge,
+  onSelectionChange,
   onPaneClick,
 }: Props) {
 
@@ -145,6 +151,16 @@ export function DialogueGraph({
 
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
+
+        onSelectionChange={({ nodes, edges }) => {
+          onSelectionChange?.(
+            nodes.map(node => node.id),
+            edges.map(edge => edge.id)
+          );
+        }}
+
+        multiSelectionKeyCode="Shift"
+        selectionKeyCode="Shift"
 
         onEdgeClick={(_, edge) => {
           const original = graph.edges.find(
