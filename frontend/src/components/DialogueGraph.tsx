@@ -170,7 +170,7 @@ export function DialogueGraph({
         }}
 
         onNodeClick={(event, node) => {
-          if (event.metaKey) return;
+          if (event.shiftKey) return;
           onSelectNode(node.data as GraphNode);
         }}
 
@@ -187,7 +187,7 @@ export function DialogueGraph({
         edgesReconnectable={false}
         deleteKeyCode={null}
 
-        multiSelectionKeyCode="Meta"
+        multiSelectionKeyCode="Shift"
         selectionKeyCode="Shift"
 
         fitView
