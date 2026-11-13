@@ -406,11 +406,52 @@ const leaveDialog = document.querySelector<HTMLDialogElement>("#leave-dialog");
 const leaveGuard = backLink && leaveDialog
   ? mountLeaveDialog({ link: backLink, dialog: leaveDialog, hasUnsavedChanges, save: saveBeforeLeaving })
   : null;
+
 document.addEventListener("keydown", (event) => {
+
+  // Delete or Backspace: remove selected graph items
+  if (
+    (event.key === "Delete" || event.key === "Backspace") &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.repeat
+  ) {
+    const active = document.activeElement;
+
+    // Don't delete nodes while typing in an input.
+    const isTyping =
+      active instanceof HTMLElement &&
+      (active.isContentEditable ||
+       active.matches("input, textarea, select") ||
+       active.closest("[contenteditable]") !== null);
+
+    if (
+      !isTyping &&
+      !leaveGuard?.open &&
+      (selectedNodeIds.size > 0 || selectedEdgeIds.size > 0)
+    ) {
+      event.preventDefault();
+      deleteGraphSelection();
+    }
+
+    return;
+  }
+
+  // Existing keyboard shortcuts
   if (!(event.ctrlKey || event.metaKey)) return;
-  if (event.key === "Enter") { event.preventDefault(); if (!leaveGuard?.open) void parse(); }
-  if (event.key.toLowerCase() === "s") { event.preventDefault(); if (!leaveGuard?.open) void save(); }
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (!leaveGuard?.open) void parse();
+  }
+
+  if (event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    if (!leaveGuard?.open) void save();
+  }
 });
+
 window.addEventListener("beforeunload", (event) => {
   if (hasUnsavedChanges() && !leaveGuard?.confirmed) { event.preventDefault(); event.returnValue = ""; }
 });
