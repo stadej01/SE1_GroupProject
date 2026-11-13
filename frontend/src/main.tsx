@@ -17,6 +17,7 @@ import { createRequest } from "./project/request";
 import { mountPanelDivider } from "./project/panelDivider";
 import { mountToolbarMenus } from "./project/toolbarMenus";
 import { mountLeaveDialog } from "./project/leaveDialog";
+import { deleteSelection, inspectDeletion } from "./editor/deleteSelection";
 import "./editor.css";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -57,6 +58,8 @@ let graphSource: string | null = null;
 let generation = 0;
 let parseRequest: AbortController | undefined;
 let selectedNode: GraphNode | null = null;
+let selectedNodeIds = new Set<string>();
+let selectedEdgeIds = new Set<string>();
 let editingGraph: Graph | null = null;
 let pendingMarkdown: string | null = null;
 let selectedNodeId: string | null = null;
@@ -67,6 +70,82 @@ let positionVersion = 0;
 let savedPositionVersion = 0;
 let activeSave: Promise<boolean> | null = null;
 let leavingAfterSave = false;
+
+type UndoSnapshot = {
+  graph: Graph;
+  markdown: string | null;
+  sourceText: string; // ADD
+  positions: Map<string, { x: number; y: number }>;
+};
+
+const undoStack: UndoSnapshot[] = [];
+
+function captureUndoState() {
+  if (!editingGraph) return;
+
+  undoStack.push({
+    graph: structuredClone(editingGraph),
+    markdown: pendingMarkdown,
+    sourceText: source.value,
+    positions: new Map(
+      [...positions].map(([id, pos]) => [id, { ...pos }])
+    )
+  });
+
+  // Limit history to 50 actions
+  if (undoStack.length > 50) {
+    undoStack.shift();
+  }
+}
+
+
+function undoLastAction() {
+  if (!editingGraph || undoStack.length === 0) return;
+
+  // Don't discard unapplied changes in the node editor
+  if (warnAboutUnappliedEdits()) return;
+
+  // Retrieve the most recent snapshot
+  const previous = undoStack.pop()!;
+
+  editingGraph = previous.graph;
+
+  // Was the graph already synced before Undo?
+  const wasSynced = pendingMarkdown === null;
+
+  if (wasSynced) {
+    // Undo after Parse: restore the correct Markdown and graph.
+    source.value = previous.markdown ?? previous.sourceText;
+    pendingMarkdown = null;
+    graphSource = source.value;
+  } else {
+    // Undo before Parse: preserve manual synchronization.
+    source.value = previous.sourceText;
+    pendingMarkdown = previous.markdown;
+    graphSource = previous.sourceText;
+  }
+
+  updateLines();
+
+  // Restore node positions
+  positions.clear();
+  for (const [id, pos] of previous.positions) {
+    positions.set(id, { ...pos });
+  }
+
+  // Clear selection and close the node editor
+  selectedNodeIds.clear();
+  selectedEdgeIds.clear();
+  selectedNode = null;
+  selectedNodeId = null;
+  nodePanel.hidden = true;
+  clearLineMark();
+
+  // Refresh the graph
+  graphChanged("Last deletion undone");
+}
+
+
 function hasUnsavedChanges() {
   return isDirty({ source: source.value, savedSource, pendingMarkdown, project: store.project,
     positionVersion, savedPositionVersion });
@@ -87,9 +166,14 @@ function renderGraph() {
   refreshConnectionOptions();
   if (!editingGraph) return;
   root.render(<EditingNodeContext.Provider value={nodePanel.hidden ? null : selectedNodeId}><DialogueGraph key={graphRenderVersion + (verticalLayout ? 100000 : 0) + (rotateLabels ? 200000 : 0)} graph={editingGraph} savedPositions={positions}
-    vertical={verticalLayout} rotateLabels={rotateLabels}
-    onSelectEdge={selectEdge}
-    onPaneClick={dismissNodeEditor}
+  vertical={verticalLayout} rotateLabels={rotateLabels}
+  onSelectEdge={selectEdge}
+  onSelectionChange={(nodes, edges) => {
+    selectedNodeIds = new Set(nodes);
+    selectedEdgeIds = new Set(edges);
+    refreshDeleteButton();
+  }}
+  onPaneClick={dismissNodeEditor}
     onSelectNode={selectNode} onMoveNode={(id, position) => {
       positions.set(id, { ...position });
       positionVersion++;
@@ -122,6 +206,79 @@ function deleteConnection() {
     graphChanged("Connection deleted");
   } catch (error) { window.alert(error instanceof Error ? error.message : "Unable to delete connection"); }
 }
+
+
+function deleteGraphSelection() {
+  if (!editingGraph || graphSource !== source.value) {
+    window.alert("Parse valid Markdown before deleting.");
+    return;
+  }
+
+  if (warnAboutUnappliedEdits()) return;
+
+  const impact = inspectDeletion(
+    editingGraph,
+    selectedNodeIds,
+    selectedEdgeIds
+  );
+
+  if (!impact.nodes.length && !impact.edges.length) return;
+
+  // Confirm when deleting nodes will affect connections.
+  if (impact.connected.length || impact.startNodes.length) {
+    const message = [
+      `Deleting nodes: ${impact.nodes.join(", ")}`,
+      "",
+      "Connections that will be removed:",
+      ...impact.connected.map(edge =>
+        `- ${edge.source} → ${edge.target} (${edge.kind})`
+      ),
+      "",
+      "Nodes referencing the deleted nodes:",
+      ...[...new Set(impact.incoming.map(edge => edge.source))]
+        .map(id => `- ${id}`),
+      "",
+      "Continue with deletion?"
+    ].join("\n");
+
+    if (!window.confirm(message)) return;
+  }
+
+  try {
+    const result = deleteSelection(
+      pendingMarkdown ?? source.value,
+      editingGraph,
+      selectedNodeIds,
+      selectedEdgeIds
+    );
+
+    // Save the current state before applying deletion
+    captureUndoState();
+    pendingMarkdown = result.markdown;
+    editingGraph = result.graph;
+
+    for (const id of result.impact.nodes) {
+      positions.delete(id);
+    }
+
+    selectedNodeIds.clear();
+    selectedEdgeIds.clear();
+    selectedNode = null;
+    selectedNodeId = null;
+    nodePanel.hidden = true;
+    clearLineMark();
+
+    graphChanged("Selected items deleted");
+
+  } catch (error) {
+    window.alert(
+      error instanceof Error
+        ? error.message
+        : "Unable to delete selection."
+    );
+  }
+}
+
 function emptyGraph(message: string) {
   root.render(<div className="empty-state"><span className="empty-glyph" aria-hidden="true">↳</span><h3>Your story, connected.</h3><p>{message}</p></div>);
   graphSource = null;
@@ -243,6 +400,7 @@ async function parse(warnAboutStart = true) {
     }
     graphSource = submittedSource;
     editingGraph = graph;
+    //undoStack.length = 0; breaking the undo GUI if parse is pressed 
     closeNodeEditor();
     renderGraph();
     graphCount.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} connections`;
@@ -306,6 +464,7 @@ async function saveBeforeLeaving(): Promise<boolean> {
 }
 
 source.addEventListener("input", () => {
+  undoStack.length = 0;
   generation++;
   parseRequest?.abort();
   parseButton.disabled = false;
@@ -327,11 +486,76 @@ const leaveDialog = document.querySelector<HTMLDialogElement>("#leave-dialog");
 const leaveGuard = backLink && leaveDialog
   ? mountLeaveDialog({ link: backLink, dialog: leaveDialog, hasUnsavedChanges, save: saveBeforeLeaving })
   : null;
+
 document.addEventListener("keydown", (event) => {
+
+  // Delete or Backspace: remove selected graph items
+  if (
+    (event.key === "Delete" || event.key === "Backspace") &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey &&
+    !event.repeat
+  ) {
+    const active = document.activeElement;
+
+    // Don't delete nodes while typing in an input.
+    const isTyping =
+      active instanceof HTMLElement &&
+      (active.isContentEditable ||
+       active.matches("input, textarea, select") ||
+       active.closest("[contenteditable]") !== null);
+
+    if (
+      !isTyping &&
+      !leaveGuard?.open &&
+      (selectedNodeIds.size > 0 || selectedEdgeIds.size > 0)
+    ) {
+      event.preventDefault();
+      deleteGraphSelection();
+    }
+
+    return;
+  }
+
+  // Existing keyboard shortcuts
   if (!(event.ctrlKey || event.metaKey)) return;
-  if (event.key === "Enter") { event.preventDefault(); if (!leaveGuard?.open) void parse(); }
-  if (event.key.toLowerCase() === "s") { event.preventDefault(); if (!leaveGuard?.open) void save(); }
+
+
+  // Cmd/Ctrl + Z: Undo the most recent GUI deletion
+  if (
+    event.key.toLowerCase() === "z" &&
+    !event.shiftKey &&
+    !event.altKey
+  ) {
+    const target = event.target;
+
+    // Preserve normal text editing Undo
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+       target.closest("input, textarea, [contenteditable]"))
+    ) return;
+
+    if (!leaveGuard?.open && undoStack.length > 0) {
+      event.preventDefault();
+      undoLastAction();
+    }
+    return;
+  }
+
+
+  if (event.key === "Enter") {
+    event.preventDefault();
+    if (!leaveGuard?.open) void parse();
+  }
+
+  if (event.key.toLowerCase() === "s") {
+    event.preventDefault();
+    if (!leaveGuard?.open) void save();
+  }
 });
+
 window.addEventListener("beforeunload", (event) => {
   if (hasUnsavedChanges() && !leaveGuard?.confirmed) { event.preventDefault(); event.returnValue = ""; }
 });
@@ -420,6 +644,28 @@ editForm.addEventListener("submit", event => {
 const toolbar = document.createElement("div");
 toolbar.className = "graph-edit-toolbar";
 toolbar.innerHTML = `<button type="button" id="new-graph-node">+ New node</button><details class="toolbar-menu starting-node-picker"><summary id="starting-node-summary">Starting nodes (none)</summary><fieldset id="starting-node-list" class="toolbar-panel"><legend>Select conversation entry nodes</legend></fieldset></details><details class="toolbar-menu"><summary id="connections-summary">Connections (0)</summary><div class="toolbar-panel connections-panel"><label>From <input id="connection-from" list="graph-node-options" aria-label="Connection source node" placeholder="Search nodes" autocomplete="off"></label><label>To <input id="connection-to" list="graph-node-options" aria-label="Connection target node" placeholder="Search nodes" autocomplete="off"></label><datalist id="graph-node-options"></datalist><label class="panel-row">Type <select id="connection-kind"><option value="choice">Player choice</option><option value="jump">Automatic jump</option></select></label><button type="button" id="add-graph-connection" class="panel-row">+ Connect nodes</button><span class="toolbar-note panel-row">Drag from a node's output handle to another node's input to connect.</span><hr class="panel-row"><label class="panel-row">Connections <select id="connection-delete" aria-label="Select connection to delete"></select></label><button type="button" id="delete-graph-connection" class="panel-row">Delete connection</button></div></details><details class="toolbar-menu"><summary id="view-summary">View</summary><div class="toolbar-panel view-panel"><label>Layout <select id="graph-layout"><option value="horizontal">Horizontal</option><option value="vertical">Vertical</option></select></label><label class="checkbox-row"><input type="checkbox" id="rotate-edge-labels"> Rotate connector text 90°</label></div></details>`;
+toolbar.insertAdjacentHTML(
+  "afterbegin",
+  `<button type="button" id="delete-graph-selection" disabled>
+    Delete selected
+  </button>`
+);
+
+function refreshDeleteButton() {
+  const button = toolbar.querySelector<HTMLButtonElement>(
+    "#delete-graph-selection"
+  );
+
+  if (!button) return;
+
+  const count = selectedNodeIds.size + selectedEdgeIds.size;
+
+  button.disabled = count === 0;
+  button.textContent = count
+    ? `Delete selected (${count})`
+    : "Delete selected";
+}
+
 function refreshConnectionOptions() {
   const from = toolbar.querySelector<HTMLInputElement>("#connection-from")!;
   const to = toolbar.querySelector<HTMLInputElement>("#connection-to")!;
@@ -480,6 +726,7 @@ toolbar.querySelector<HTMLButtonElement>("#add-graph-connection")!.addEventListe
   catch (error) { window.alert(error instanceof Error ? error.message : "Cannot connect nodes"); }
 });
 toolbar.querySelector<HTMLButtonElement>("#delete-graph-connection")!.addEventListener("click", deleteConnection);
+toolbar.querySelector<HTMLButtonElement>("#delete-graph-selection")!.addEventListener("click", deleteGraphSelection);
 toolbar.querySelector<HTMLFieldSetElement>("#starting-node-list")!.addEventListener("change", event => {
   if (!editingGraph || graphSource !== source.value) return;
   const starts = [...toolbar.querySelectorAll<HTMLInputElement>("#starting-node-list input:checked")].map(input => input.value);
