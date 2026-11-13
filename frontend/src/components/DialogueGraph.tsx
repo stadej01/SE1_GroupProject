@@ -159,9 +159,6 @@ export function DialogueGraph({
           );
         }}
 
-        multiSelectionKeyCode="Shift"
-        selectionKeyCode="Shift"
-
         onEdgeClick={(_, edge) => {
           const original = graph.edges.find(
             item => item.id === edge.id
