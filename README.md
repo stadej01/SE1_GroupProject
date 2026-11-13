@@ -318,6 +318,7 @@ The login page sends the email and password to `POST /api/v1/auth/login`. It ret
 | `POST /api/v1/projects` | Create with `name` and `team_id`; returns `201` |
 | `GET /api/v1/projects/<project_id>` | Read Markdown, `revision`, and `layout_data` |
 | `PUT /api/v1/projects/<project_id>/save` | Send `markdown_source`, `layout_data.nodes`, and `base_revision`; returns the new revision |
+| `GET /api/v1/projects/<project_id>/export` | Compile the saved Markdown into the JSON AST download (US-25); returns `422` with a timestamped error log when the Markdown has errors |
 
 A stale save returns `409`. Failed storage reads or writes return `503`, as does waiting too long for another save to the same branch. The editor displays the reason and keeps unsaved text available.
 
@@ -445,6 +446,7 @@ python manage.py runserver 127.0.0.1:8000 --settings=config.settings
 ### Current limitations
 
 - The parser uses a regex prototype. The planned Lark parser and full dialogue language are pending.
+- Export compiles the last saved revision; the editor asks to save unsaved changes first. The JSON has no top-level `variables` list yet, because the dialogue script has no variable declarations. `[set: ...]` lines are exported in each node's `sequence`.
 - Save stores text and positions without running the parser. Its `diagnostics` stays empty; positions for deleted nodes remain stored.
 - Layout direction resets when a project reopens.
 - Browsers do not allow a custom dialog when a tab closes. Only **← Projects** offers save or discard; other ways of leaving use the browser's built-in prompt.

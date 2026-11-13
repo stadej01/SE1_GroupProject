@@ -1,11 +1,20 @@
+import json
 import logging
 
 from django.shortcuts import get_object_or_404
+from django.utils.http import content_disposition_header
+from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from dialogue_graph import (
+    GraphValidationError,
+    compile_to_json,
+    error_log,
+    parse_markdown_to_ast,
+)
 from teams.models import Team
 
 from .models import Project
@@ -128,4 +137,47 @@ class ProjectSaveView(APIView):
                 "updated_at": project.updated_at,
                 "diagnostics": [],
             }
+        )
+
+
+def export_filename(project):
+    return f"{slugify(project.name) or 'dialogue'}.json"
+
+
+class ProjectExportView(APIView):
+    """Compile the saved Markdown into the JSON AST."""
+
+    def get(self, request, project_id):
+        project = get_member_project(request, project_id)
+        project, _ = read_project_snapshot(project)
+        try:
+            markdown = read_markdown(project, get_content_store())
+        except ContentStoreError:
+            logger.warning(
+                "Could not read Markdown to export project %s.",
+                project.pk,
+                exc_info=True,
+            )
+            return Response(
+                CONTENT_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+
+        ast = parse_markdown_to_ast(markdown)
+        try:
+            export, warnings = compile_to_json(ast)
+        except GraphValidationError as failure:
+            return Response(
+                error_log(failure.diagnostics, ast["snapshot_id"]),
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                headers={"Cache-Control": "no-store"},
+            )
+        return Response(
+            export,
+            headers={
+                "Content-Disposition": content_disposition_header(
+                    True, export_filename(project)
+                ),
+                "X-Dialogue-Warnings": json.dumps(warnings),
+                "Cache-Control": "no-store",
+            },
         )

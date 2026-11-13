@@ -14,4 +14,9 @@ urlpatterns = [
         views.ProjectSaveView.as_view(),
         name="project-save",
     ),
+    path(
+        "projects/<uuid:project_id>/export",
+        views.ProjectExportView.as_view(),
+        name="project-export",
+    ),
 ]

@@ -17,6 +17,7 @@ import { createRequest } from "./project/request";
 import { mountPanelDivider } from "./project/panelDivider";
 import { mountToolbarMenus } from "./project/toolbarMenus";
 import { mountLeaveDialog } from "./project/leaveDialog";
+import { ExportBlockedError, downloadBlob, exportErrorNotice, exportProject } from "./project/export";
 import "./editor.css";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -29,6 +30,7 @@ const app = element("editor");
 const source = element<HTMLTextAreaElement>("markdown-source");
 const parseButton = element<HTMLButtonElement>("parse-button");
 const saveButton = element<HTMLButtonElement>("save-button");
+const exportButton = document.querySelector<HTMLButtonElement>("#export-button");
 const parseStatus = element("parse-status");
 const saveStatus = element("save-status");
 const graphCount = element("graph-count");
@@ -297,6 +299,34 @@ async function submitSave(): Promise<boolean> {
   } finally { saveButton.disabled = false; }
 }
 
+// Save first, then compile and export.
+async function exportJson() {
+  if (!exportButton || exportButton.disabled) return;
+  if (activeSave || hasUnsavedChanges()) {
+    if (!window.confirm("Export uses the saved project. Save your changes and export?")) return;
+    const saved = (!activeSave || await activeSave) && (!hasUnsavedChanges() || await save());
+    if (!saved) return;
+  }
+  exportButton.disabled = true;
+  saveStatus.dataset.error = "false";
+  saveStatus.textContent = "Exporting…";
+  try {
+    const result = await exportProject(app.dataset.exportUrl!);
+    downloadBlob(result.blob, result.filename);
+    saveStatus.textContent = `Exported ${result.filename}`;
+    showDiagnostics(result.warnings);
+  } catch (error) {
+    if (error instanceof ExportBlockedError) {
+      saveStatus.textContent = "Export blocked by errors";
+      showDiagnostics(error.diagnostics);
+      element("diagnostics-heading").textContent = "Export blocked";
+      element("diagnostics-help").textContent = "No JSON was created. Fix these issues, save, and export again.";
+    } else {
+      showErrorNotice(saveStatus, exportErrorNotice(error), app.dataset.loginUrl);
+    }
+  } finally { exportButton.disabled = false; }
+}
+
 // A save that was already running may not include the newest edits.
 async function saveBeforeLeaving(): Promise<boolean> {
   leavingAfterSave = true;
@@ -322,6 +352,7 @@ source.addEventListener("scroll", () => { lineNumbers.scrollTop = source.scrollT
 source.addEventListener("focus", clearLineMark);
 parseButton.addEventListener("click", () => { void parse(); });
 saveButton.addEventListener("click", () => { void save(); });
+exportButton?.addEventListener("click", () => { void exportJson(); });
 const backLink = document.querySelector<HTMLAnchorElement>("#back-to-projects");
 const leaveDialog = document.querySelector<HTMLDialogElement>("#leave-dialog");
 const leaveGuard = backLink && leaveDialog
@@ -520,7 +551,11 @@ toolbar.querySelector<HTMLInputElement>("#rotate-edge-labels")!.addEventListener
 
 emptyGraph("Parse the Markdown to see dialogue nodes, choices, and jumps.");
 void initializeEditor(store, {
-  setEnabled: enabled => { source.disabled = parseButton.disabled = saveButton.disabled = !enabled; toolbar.inert = !enabled; },
+  setEnabled: enabled => {
+    source.disabled = parseButton.disabled = saveButton.disabled = !enabled;
+    if (exportButton) exportButton.disabled = !enabled;
+    toolbar.inert = !enabled;
+  },
   restore: snapshot => {
     source.value = snapshot.markdown_source; savedSource = source.value; updateLines();
     revision = snapshot.revision; applyLayout(positions, snapshot.layout_data);

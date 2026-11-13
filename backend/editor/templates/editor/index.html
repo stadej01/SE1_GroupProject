@@ -7,10 +7,10 @@
   {% for stylesheet in assets.styles %}<link rel="stylesheet" href="{{ stylesheet }}">{% endfor %}
 </head>
 <body>
-  <main id="editor" data-sync-url="{{ sync_url }}" data-save-url="{{ save_url }}" data-open-url="{{ open_url }}" data-revision="{{ revision }}" data-csrf-cookie="{{ csrf_cookie_name }}"{% if login_url %} data-login-url="{{ login_url }}"{% endif %}>
+  <main id="editor" data-sync-url="{{ sync_url }}" data-save-url="{{ save_url }}" data-open-url="{{ open_url }}" data-revision="{{ revision }}" data-csrf-cookie="{{ csrf_cookie_name }}"{% if export_url %} data-export-url="{{ export_url }}"{% endif %}{% if login_url %} data-login-url="{{ login_url }}"{% endif %}>
     <header class="app-header">
       <div class="app-identity">{% if project %}<nav aria-label="Project navigation"><a id="back-to-projects" class="back-link" href="{% url 'pages:home' %}">← Projects</a></nav><span class="crumb-separator" aria-hidden="true">/</span>{% endif %}<h1{% if project %} title="{{ project.name }}"{% endif %}>{% if project %}{{ project.name }}{% else %}Dialogue editor{% endif %}</h1></div>
-      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if project %}<form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
+      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if export_url %}<button id="export-button" type="button" disabled>Export JSON</button>{% endif %}{% if project %}<form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
     </header>
     <div id="workspace" class="workspace">
       <section class="source-panel panel" aria-labelledby="source-heading">

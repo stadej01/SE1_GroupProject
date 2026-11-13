@@ -413,6 +413,9 @@ class ProjectAPITestCase(APITestCase):
     def open_project(self, project_id):
         return self.client.get(reverse("project-detail", args=[project_id]))
 
+    def export_project(self, project_id):
+        return self.client.get(reverse("project-export", args=[project_id]))
+
     def save_project(self, project_id, markdown, nodes=(), base_revision=1):
         return self.client.put(
             reverse("project-save", args=[project_id]),
@@ -940,3 +943,138 @@ class GitHubSaveTests(ProjectAPITestCase):
         reopened = self.open_project(project_id).json()
         self.assertEqual(reopened["markdown_source"], self.MARKDOWN)
         self.assertEqual(reopened["revision"], 2)
+
+
+class ExportProjectTests(ProjectAPITestCase):
+    """US-25: GET /api/v1/projects/{id}/export compiles the saved Markdown."""
+
+    VALID = (
+        "<!-- start: Node_1 -->\n"
+        "# Node_1\n"
+        "<!-- REVIEW (Alex): check the tone. -->\n"
+        "Merchant: Hello! <!-- #line:dlg_001 -->\n"
+        '* "Goodbye." -> Node_2 <!-- #line:chc_001 -->\n'
+        "\n"
+        "# Node_2\n"
+        "Merchant: Bye.\n"
+    )
+    BROKEN = "<!-- start: Node_1 -->\n# Node_1\nMerchant: Hello!\nthis line is not dialogue\n"
+
+    def saved_project(self, markdown):
+        project_id = self.create_project()
+        response = self.save_project(project_id, markdown)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return project_id
+
+    def test_valid_project_downloads_its_json_ast(self):
+        """AC1: node IDs, dialogue, choices, and destinations are preserved."""
+        response = self.export_project(self.saved_project(self.VALID))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response["Content-Disposition"], 'attachment; filename="act-1-dialogue.json"'
+        )
+        body = response.json()
+        self.assertEqual(body["schema_version"], "1.0")
+        self.assertEqual(body["start_nodes"], ["Node_1"])
+        self.assertEqual([node["id"] for node in body["nodes"]], ["Node_1", "Node_2"])
+        first = body["nodes"][0]
+        self.assertEqual(
+            first["sequence"],
+            [{"type": "dialogue", "speaker": "Merchant", "text": "Hello!", "line_id": "dlg_001"}],
+        )
+        self.assertEqual(
+            first["choices"],
+            [{"text": "Goodbye.", "target": "Node_2", "condition": None, "line_id": "chc_001"}],
+        )
+        self.assertEqual(json.loads(response["X-Dialogue-Warnings"]), [])
+
+    def test_export_leaves_out_editor_data(self):
+        response = self.export_project(self.saved_project(self.VALID))
+
+        text = response.content.decode()
+        self.assertNotIn("source_line", text)
+        self.assertNotIn("REVIEW", text)
+        self.assertNotIn("layout_data", text)
+        self.assertNotIn("comments", text)
+
+    def test_broken_project_fails_with_a_timestamped_error_log(self):
+        """AC2: message, time stamp, and source of failure; no JSON AST."""
+        response = self.export_project(self.saved_project(self.BROKEN))
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertNotIn("Content-Disposition", response)
+        body = response.json()
+        self.assertFalse(body["ok"])
+        self.assertNotIn("nodes", body)
+        self.assertRegex(body["detected_at"], r"^\d{4}-\d\d-\d\dT.*Z$")
+        error = body["diagnostics"][0]
+        self.assertIn("Unrecognized line", error["message"])
+        self.assertEqual((error["line"], error["node_id"]), (4, "Node_1"))
+        self.assertEqual(error["detected_at"], body["detected_at"])
+        self.assertEqual(error["snapshot_id"], body["snapshot_id"])
+
+    def test_new_project_without_markdown_fails_validation(self):
+        response = self.export_project(self.create_project())
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertIn("header", response.json()["diagnostics"][0]["message"])
+
+    def test_missing_start_node_exports_and_reports_the_warning(self):
+        response = self.export_project(self.saved_project("# Node_1\nMerchant: Hi.\n"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        warnings = json.loads(response["X-Dialogue-Warnings"])
+        self.assertEqual([item["severity"] for item in warnings], ["warning"])
+
+    def test_export_uses_the_saved_revision(self):
+        project_id = self.saved_project(self.VALID)
+        self.save_project(project_id, self.BROKEN, base_revision=2)
+
+        response = self.export_project(project_id)
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+
+    def test_export_does_not_change_the_project(self):
+        project_id = self.saved_project(self.VALID)
+        before = Project.objects.get(pk=project_id)
+
+        self.export_project(project_id)
+
+        after = Project.objects.get(pk=project_id)
+        self.assertEqual(
+            (after.revision, after.head_commit_sha), (before.revision, before.head_commit_sha)
+        )
+
+    def test_unknown_project_returns_404(self):
+        response = self.export_project("00000000-0000-0000-0000-000000000000")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_non_member_cannot_export(self):
+        project_id = self.saved_project(self.VALID)
+        self.client.force_authenticate(self.outsider)
+
+        response = self.export_project(project_id)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertNotIn("nodes", response.json())
+
+    def test_unauthenticated_export_returns_401(self):
+        project_id = self.saved_project(self.VALID)
+        self.client.force_authenticate(user=None)
+
+        response = self.export_project(project_id)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_storage_outage_returns_503(self):
+        project_id = self.saved_project(self.VALID)
+
+        with (
+            mock.patch.object(self.store, "read", side_effect=ContentStoreError("down")),
+            self.assertLogs("projects.views", "WARNING"),
+        ):
+            response = self.export_project(project_id)
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
