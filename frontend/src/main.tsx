@@ -96,6 +96,39 @@ function captureUndoState() {
   }
 }
 
+
+function undoLastAction() {
+  if (!editingGraph || undoStack.length === 0) return;
+
+  // Don't discard unapplied changes in the node editor
+  if (warnAboutUnappliedEdits()) return;
+
+  // Retrieve the most recent snapshot
+  const previous = undoStack.pop()!;
+
+  // Restore the graph and pending Markdown
+  editingGraph = previous.graph;
+  pendingMarkdown = previous.markdown;
+
+  // Restore node positions
+  positions.clear();
+  for (const [id, pos] of previous.positions) {
+    positions.set(id, { ...pos });
+  }
+
+  // Clear selection and close the node editor
+  selectedNodeIds.clear();
+  selectedEdgeIds.clear();
+  selectedNode = null;
+  selectedNodeId = null;
+  nodePanel.hidden = true;
+  clearLineMark();
+
+  // Refresh the graph
+  graphChanged("Last deletion undone");
+}
+
+
 function hasUnsavedChanges() {
   return isDirty({ source: source.value, savedSource, pendingMarkdown, project: store.project,
     positionVersion, savedPositionVersion });
@@ -202,6 +235,8 @@ function deleteGraphSelection() {
       selectedEdgeIds
     );
 
+    // Save the current state before applying deletion
+    captureUndoState();
     pendingMarkdown = result.markdown;
     editingGraph = result.graph;
 
@@ -348,6 +383,7 @@ async function parse(warnAboutStart = true) {
     }
     graphSource = submittedSource;
     editingGraph = graph;
+    undoStack.length = 0;
     closeNodeEditor();
     renderGraph();
     graphCount.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} connections`;
@@ -411,6 +447,7 @@ async function saveBeforeLeaving(): Promise<boolean> {
 }
 
 source.addEventListener("input", () => {
+  undoStack.length = 0;
   generation++;
   parseRequest?.abort();
   parseButton.disabled = false;
@@ -466,6 +503,30 @@ document.addEventListener("keydown", (event) => {
 
   // Existing keyboard shortcuts
   if (!(event.ctrlKey || event.metaKey)) return;
+
+
+  // Cmd/Ctrl + Z: Undo the most recent GUI deletion
+  if (
+    event.key.toLowerCase() === "z" &&
+    !event.shiftKey &&
+    !event.altKey
+  ) {
+    const target = event.target;
+
+    // Preserve normal text editing Undo
+    if (
+      target instanceof HTMLElement &&
+      (target.isContentEditable ||
+       target.closest("input, textarea, [contenteditable]"))
+    ) return;
+
+    if (!leaveGuard?.open && undoStack.length > 0) {
+      event.preventDefault();
+      undoLastAction();
+    }
+    return;
+  }
+
 
   if (event.key === "Enter") {
     event.preventDefault();
