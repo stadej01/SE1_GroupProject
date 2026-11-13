@@ -172,9 +172,10 @@ export function DialogueGraph({
           }
         }}
 
-        onNodeClick={(_, node) =>
-          onSelectNode(node.data as GraphNode)
-        }
+        onNodeClick={(event, node) => {
+          if (event.shiftKey) return;
+          onSelectNode(node.data as GraphNode);
+        }}
 
         onPaneClick={onPaneClick}
 
@@ -188,6 +189,9 @@ export function DialogueGraph({
         nodesConnectable={Boolean(onConnectNodes)}
         edgesReconnectable={false}
         deleteKeyCode={null}
+
+        multiSelectionKeyCode="Shift"
+        selectionKeyCode="Shift"
 
         fitView
         // Keep the first view clear of the legend in the bottom-right corner.
