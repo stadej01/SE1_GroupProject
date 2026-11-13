@@ -37,3 +37,7 @@ class ProjectSaveSerializer(serializers.Serializer):
     markdown_source = serializers.CharField(allow_blank=True, trim_whitespace=False)
     layout_data = LayoutSerializer()
     base_revision = serializers.IntegerField(min_value=1)
+
+
+class ProjectExportSerializer(serializers.Serializer):
+    markdown_source = serializers.CharField(allow_blank=True, trim_whitespace=False)
