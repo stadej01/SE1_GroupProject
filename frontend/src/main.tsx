@@ -130,6 +130,77 @@ function deleteConnection() {
     graphChanged("Connection deleted");
   } catch (error) { window.alert(error instanceof Error ? error.message : "Unable to delete connection"); }
 }
+
+
+function deleteGraphSelection() {
+  if (!editingGraph || graphSource !== source.value) {
+    window.alert("Parse valid Markdown before deleting.");
+    return;
+  }
+
+  if (warnAboutUnappliedEdits()) return;
+
+  const impact = inspectDeletion(
+    editingGraph,
+    selectedNodeIds,
+    selectedEdgeIds
+  );
+
+  if (!impact.nodes.length && !impact.edges.length) return;
+
+  // Confirm when deleting nodes will affect connections.
+  if (impact.connected.length || impact.startNodes.length) {
+    const message = [
+      `Deleting nodes: ${impact.nodes.join(", ")}`,
+      "",
+      "Connections that will be removed:",
+      ...impact.connected.map(edge =>
+        `- ${edge.source} → ${edge.target} (${edge.kind})`
+      ),
+      "",
+      "Nodes referencing the deleted nodes:",
+      ...[...new Set(impact.incoming.map(edge => edge.source))]
+        .map(id => `- ${id}`),
+      "",
+      "Continue with deletion?"
+    ].join("\n");
+
+    if (!window.confirm(message)) return;
+  }
+
+  try {
+    const result = deleteSelection(
+      pendingMarkdown ?? source.value,
+      editingGraph,
+      selectedNodeIds,
+      selectedEdgeIds
+    );
+
+    pendingMarkdown = result.markdown;
+    editingGraph = result.graph;
+
+    for (const id of result.impact.nodes) {
+      positions.delete(id);
+    }
+
+    selectedNodeIds.clear();
+    selectedEdgeIds.clear();
+    selectedNode = null;
+    selectedNodeId = null;
+    nodePanel.hidden = true;
+    clearLineMark();
+
+    graphChanged("Selected items deleted");
+
+  } catch (error) {
+    window.alert(
+      error instanceof Error
+        ? error.message
+        : "Unable to delete selection."
+    );
+  }
+}
+
 function emptyGraph(message: string) {
   root.render(<div className="empty-state"><span className="empty-glyph" aria-hidden="true">↳</span><h3>Your story, connected.</h3><p>{message}</p></div>);
   graphSource = null;
@@ -449,6 +520,7 @@ function refreshDeleteButton() {
     ? `Delete selected (${count})`
     : "Delete selected";
 }
+
 function refreshConnectionOptions() {
   const from = toolbar.querySelector<HTMLInputElement>("#connection-from")!;
   const to = toolbar.querySelector<HTMLInputElement>("#connection-to")!;
@@ -509,6 +581,7 @@ toolbar.querySelector<HTMLButtonElement>("#add-graph-connection")!.addEventListe
   catch (error) { window.alert(error instanceof Error ? error.message : "Cannot connect nodes"); }
 });
 toolbar.querySelector<HTMLButtonElement>("#delete-graph-connection")!.addEventListener("click", deleteConnection);
+toolbar.querySelector<HTMLButtonElement>("#delete-graph-selection")!.addEventListener("click", deleteGraphSelection);
 toolbar.querySelector<HTMLFieldSetElement>("#starting-node-list")!.addEventListener("change", event => {
   if (!editingGraph || graphSource !== source.value) return;
   const starts = [...toolbar.querySelectorAll<HTMLInputElement>("#starting-node-list input:checked")].map(input => input.value);
