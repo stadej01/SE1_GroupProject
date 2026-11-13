@@ -74,6 +74,7 @@ let leavingAfterSave = false;
 type UndoSnapshot = {
   graph: Graph;
   markdown: string | null;
+  sourceText: string; // ADD
   positions: Map<string, { x: number; y: number }>;
 };
 
@@ -85,6 +86,7 @@ function captureUndoState() {
   undoStack.push({
     graph: structuredClone(editingGraph),
     markdown: pendingMarkdown,
+    sourceText: source.value,
     positions: new Map(
       [...positions].map(([id, pos]) => [id, { ...pos }])
     )
@@ -106,9 +108,24 @@ function undoLastAction() {
   // Retrieve the most recent snapshot
   const previous = undoStack.pop()!;
 
-  // Restore the graph and pending Markdown
   editingGraph = previous.graph;
-  pendingMarkdown = previous.markdown;
+
+  // Was the graph already synced before Undo?
+  const wasSynced = pendingMarkdown === null;
+
+  if (wasSynced) {
+    // Undo after Parse: restore the correct Markdown and graph.
+    source.value = previous.markdown ?? previous.sourceText;
+    pendingMarkdown = null;
+    graphSource = source.value;
+  } else {
+    // Undo before Parse: preserve manual synchronization.
+    source.value = previous.sourceText;
+    pendingMarkdown = previous.markdown;
+    graphSource = previous.sourceText;
+  }
+
+  updateLines();
 
   // Restore node positions
   positions.clear();
@@ -383,7 +400,7 @@ async function parse(warnAboutStart = true) {
     }
     graphSource = submittedSource;
     editingGraph = graph;
-    undoStack.length = 0;
+    //undoStack.length = 0; breaking the undo GUI if parse is pressed 
     closeNodeEditor();
     renderGraph();
     graphCount.textContent = `${graph.nodes.length} nodes · ${graph.edges.length} connections`;
