@@ -70,6 +70,32 @@ let positionVersion = 0;
 let savedPositionVersion = 0;
 let activeSave: Promise<boolean> | null = null;
 let leavingAfterSave = false;
+
+type UndoSnapshot = {
+  graph: Graph;
+  markdown: string | null;
+  positions: Map<string, { x: number; y: number }>;
+};
+
+const undoStack: UndoSnapshot[] = [];
+
+function captureUndoState() {
+  if (!editingGraph) return;
+
+  undoStack.push({
+    graph: structuredClone(editingGraph),
+    markdown: pendingMarkdown,
+    positions: new Map(
+      [...positions].map(([id, pos]) => [id, { ...pos }])
+    )
+  });
+
+  // Limit history to 50 actions
+  if (undoStack.length > 50) {
+    undoStack.shift();
+  }
+}
+
 function hasUnsavedChanges() {
   return isDirty({ source: source.value, savedSource, pendingMarkdown, project: store.project,
     positionVersion, savedPositionVersion });
