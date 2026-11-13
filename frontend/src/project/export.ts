@@ -34,11 +34,21 @@ export function parseWarnings(header: string | null): Diagnostic[] {
   } catch { return []; }
 }
 
-export async function exportProject(url: string): Promise<ExportResult> {
+export interface UnsavedExport {
+  markdown: string;
+  csrf: string;
+}
+
+// Without unsaved, the server exports the saved Markdown. With it, the server
+// exports that text instead and saves nothing.
+export async function exportProject(url: string, unsaved?: UnsavedExport): Promise<ExportResult> {
+  const init: RequestInit = unsaved
+    ? { method: "POST", body: JSON.stringify({ markdown_source: unsaved.markdown }),
+        headers: { "Content-Type": "application/json", "X-CSRFToken": unsaved.csrf, Accept: "application/json" } }
+    : { method: "GET", headers: { Accept: "application/json" } };
   let response: Response;
   try {
-    response = await fetch(url, { method: "GET", mode: "same-origin", credentials: "same-origin",
-      headers: { Accept: "application/json" } });
+    response = await fetch(url, { ...init, mode: "same-origin", credentials: "same-origin" });
   } catch {
     throw new ProjectRequestError(null);
   }
@@ -64,12 +74,17 @@ export async function exportProject(url: string): Promise<ExportResult> {
 
 export function exportErrorNotice(error: unknown): ErrorNotice {
   if (!(error instanceof ProjectRequestError)) return { message: "The server had a problem. Nothing was exported." };
-  const { status, isJson } = error;
+  const { status, isJson, detail } = error;
   if (status === null) return { message: "Could not reach the server. Nothing was exported." };
   if (!isJson) return { message: `The server had a problem (${status}). Nothing was exported.` };
   switch (status) {
     case 401: return { message: "You are signed out. Nothing was exported.", signIn: true };
-    case 403: return { message: "You do not have access to export this project." };
+    case 400: return { message: "The editor text could not be sent. Nothing was exported." };
+    case 403:
+      if (typeof detail === "string" && detail.startsWith("CSRF Failed")) {
+        return { message: "Security check failed. Try reloading the page." };
+      }
+      return { message: "You do not have access to export this project." };
     case 404: return { message: "This project no longer exists and cannot be exported." };
     case 503: return { message: "Project storage is not available right now. Nothing was exported. Try again later." };
     default: return { message: `The server had a problem (${status}). Nothing was exported.` };

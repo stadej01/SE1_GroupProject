@@ -68,9 +68,11 @@ test("warnings header tolerates absence and bad JSON", () => {
 for (const [error, message, signIn] of [
   [new ProjectRequestError(401), "You are signed out. Nothing was exported.", true],
   [new ProjectRequestError(403, "Not a member"), "You do not have access to export this project.", false],
+  [new ProjectRequestError(400), "The editor text could not be sent. Nothing was exported.", false],
+  [new ProjectRequestError(403, "CSRF Failed: CSRF token missing."), "Security check failed. Copy your text, then reload.", false],
   [new ProjectRequestError(404), "This project no longer exists and cannot be exported.", false],
   [new ProjectRequestError(503), "Project storage is not available right now. Nothing was exported. Try again later.", false],
-  [new ProjectRequestError(null), "Could not reach the server. Nothing was exported. Try again.", false],
+  [new ProjectRequestError(null), "Could not reach the server. Nothing was exported.", false],
   [new ProjectRequestError(500, null, undefined, false), "The server had a problem (500). Nothing was exported.", false],
 ] as const) {
   test(`export notice: ${message}`, () => {
@@ -79,3 +81,26 @@ for (const [error, message, signIn] of [
     assert.equal(Boolean(notice.signIn), signIn);
   });
 }
+
+test("unsaved editor text is posted with the CSRF token", async test => {
+  test.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    assert.equal(url, "/api/v1/projects/1/export");
+    assert.equal(init.method, "POST");
+    assert.equal(init.credentials, "same-origin");
+    const headers = init.headers as Record<string, string>;
+    assert.equal(headers["X-CSRFToken"], "token-1");
+    assert.equal(headers["Content-Type"], "application/json");
+    assert.deepEqual(JSON.parse(init.body as string), { markdown_source: "# Node_1\nA: Hi.\n" });
+    return Response.json(EXPORT, { headers: { "Content-Disposition": 'attachment; filename="act-1.json"' } });
+  });
+  const result = await exportProject("/api/v1/projects/1/export", { markdown: "# Node_1\nA: Hi.\n", csrf: "token-1" });
+  assert.equal(result.filename, "act-1.json");
+});
+
+test("the downloaded file keeps the server's formatting", async test => {
+  const pretty = JSON.stringify(EXPORT, null, 2) + "\n";
+  test.mock.method(globalThis, "fetch", async () =>
+    new Response(pretty, { headers: { "Content-Type": "application/json; charset=utf-8" } }));
+  const result = await exportProject("/x");
+  assert.equal(await result.blob.text(), pretty);
+});

@@ -34,6 +34,13 @@
       <div class="leave-dialog-actions"><button id="leave-discard" type="button">Discard changes</button><button id="leave-cancel" type="button">Cancel</button><button id="leave-save" class="primary" type="button" autofocus>Save and leave</button></div>
     </dialog>
     {% endif %}
+    {% if export_url %}
+    <dialog id="export-dialog" class="leave-dialog" aria-labelledby="export-dialog-title" aria-describedby="export-dialog-help">
+      <h2 id="export-dialog-title">Save before exporting?</h2>
+      <p id="export-dialog-help">You have unsaved changes, so this export will not match your last save. Would you like to save first?</p>
+      <div class="leave-dialog-actions"><button id="export-unsaved" type="button">Export without saving</button><button id="export-cancel" type="button">Cancel</button><button id="export-save" class="primary" type="button" autofocus>Save and export</button></div>
+    </dialog>
+    {% endif %}
   </main>
   <noscript><p>This editor needs JavaScript to parse, save, and display the graph.</p></noscript>
   {% if assets %}<script type="module" src="{{ assets.script }}"></script>{% else %}<p>Frontend assets are missing. Run <code>npm ci &amp;&amp; npm run build</code> in <code>frontend/</code>, then reload.</p>{% endif %}

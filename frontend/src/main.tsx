@@ -18,6 +18,7 @@ import { mountPanelDivider } from "./project/panelDivider";
 import { mountToolbarMenus } from "./project/toolbarMenus";
 import { mountLeaveDialog } from "./project/leaveDialog";
 import { ExportBlockedError, downloadBlob, exportErrorNotice, exportProject } from "./project/export";
+import { askExportChoice } from "./project/exportDialog";
 import "./editor.css";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -31,6 +32,7 @@ const source = element<HTMLTextAreaElement>("markdown-source");
 const parseButton = element<HTMLButtonElement>("parse-button");
 const saveButton = element<HTMLButtonElement>("save-button");
 const exportButton = document.querySelector<HTMLButtonElement>("#export-button");
+const exportDialog = document.querySelector<HTMLDialogElement>("#export-dialog");
 const parseStatus = element("parse-status");
 const saveStatus = element("save-status");
 const graphCount = element("graph-count");
@@ -299,28 +301,35 @@ async function submitSave(): Promise<boolean> {
   } finally { saveButton.disabled = false; }
 }
 
-// Save first, then compile and export.
+// Export the saved project. With unsaved changes, ask whether to save first or to
+// export the editor text as it is.
 async function exportJson() {
   if (!exportButton || exportButton.disabled) return;
-  if (activeSave || hasUnsavedChanges()) {
-    if (!window.confirm("Export uses the saved project. Save your changes and export?")) return;
-    const saved = (!activeSave || await activeSave) && (!hasUnsavedChanges() || await save());
-    if (!saved) return;
+  if (activeSave) await activeSave;
+  let unsaved: string | undefined;
+  if (hasUnsavedChanges()) {
+    const choice = exportDialog ? await askExportChoice(exportDialog) : "unsaved";
+    if (choice === "cancel") return;
+    if (choice === "save" && !await save()) return;
+    if (choice === "unsaved") unsaved = source.value;
   }
   exportButton.disabled = true;
   saveStatus.dataset.error = "false";
   saveStatus.textContent = "Exporting…";
   try {
-    const result = await exportProject(app.dataset.exportUrl!);
+    const result = await exportProject(app.dataset.exportUrl!,
+      unsaved === undefined ? undefined : { markdown: unsaved, csrf: getCsrfToken() });
     downloadBlob(result.blob, result.filename);
-    saveStatus.textContent = `Exported ${result.filename}`;
+    saveStatus.textContent = unsaved === undefined
+      ? `Exported ${result.filename}`
+      : `Exported ${result.filename} with unsaved changes`;
     showDiagnostics(result.warnings);
   } catch (error) {
     if (error instanceof ExportBlockedError) {
       saveStatus.textContent = "Export blocked by errors";
       showDiagnostics(error.diagnostics);
       element("diagnostics-heading").textContent = "Export blocked";
-      element("diagnostics-help").textContent = "No JSON was created. Fix these issues, save, and export again.";
+      element("diagnostics-help").textContent = "No JSON was created. Fix these issues and export again.";
     } else {
       showErrorNotice(saveStatus, exportErrorNotice(error), app.dataset.loginUrl);
     }

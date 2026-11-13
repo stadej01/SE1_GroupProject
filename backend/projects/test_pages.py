@@ -132,6 +132,7 @@ class ProjectPageTests(TestCase):
         self.assertContains(response, f'data-save-url="/api/v1/projects/{self.project.pk}/save"')
         self.assertContains(response, f'data-export-url="/api/v1/projects/{self.project.pk}/export"')
         self.assertContains(response, 'id="export-button"')
+        self.assertContains(response, 'id="export-dialog"')
         self.assertContains(response, 'data-revision="1"')
         self.assertNotContains(response, "draft")
         self.assertRegex(response.content.decode(), r'<textarea[^>]*id="markdown-source"[^>]*disabled')
