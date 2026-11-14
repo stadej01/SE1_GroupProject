@@ -128,6 +128,7 @@ class ProjectPageTests(TestCase):
         self.assertRegex(response.content.decode(), r'<textarea[^>]*id="markdown-source"[^>]*></textarea>')
         self.assertNotContains(response, "Node_Merchant")
         self.assertContains(response, 'data-sync-url="/sync"')
+        self.assertContains(response, 'data-continuity-url="/continuity"')
         self.assertContains(response, f'data-open-url="/api/v1/projects/{self.project.pk}"')
         self.assertContains(response, f'data-save-url="/api/v1/projects/{self.project.pk}/save"')
         self.assertContains(response, 'data-revision="1"')
@@ -171,6 +172,25 @@ class SharedSyncTests(TestCase):
         self.assertTrue(response.json()["ok"])
         self.assertEqual([node["id"] for node in response.json()["graph"]["nodes"]], ["A", "B"])
         self.assertEqual(response.json()["graph"]["edges"][0]["target"], "B")
+
+    def test_anonymous_continuity_is_json_401_even_without_csrf(self):
+        response = self.client.post("/continuity", {"markdown_source": VALID}, content_type="application/json")
+        self.assertEqual(response.status_code, 401)
+        self.assertFalse(response.json()["ok"])
+        self.assertTrue(response.json()["diagnostics"])
+
+    def test_authenticated_continuity_with_csrf_returns_status(self):
+        self.sign_in()
+        self.client.get("/")
+        token = self.client.cookies[settings.CSRF_COOKIE_NAME].value
+        response = self.client.post(
+            "/continuity",
+            {"markdown_source": '<!-- start: A -->\n<!-- end: B -->\n# A\n* "Go" -> B\n# B\nNarrator: End.\n'},
+            content_type="application/json",
+            HTTP_X_CSRFTOKEN=token,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["continuity_status"], "clean")
 
     def test_form_csrf_failure_keeps_django_html_response(self):
         response = self.client.post(reverse("accounts:register"), {"email": self.user.email})

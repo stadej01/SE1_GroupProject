@@ -67,6 +67,7 @@ def project(request, project_id):
         "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
         "login_url": reverse("accounts:login"),
         "sync_url": reverse("sync"),
+        "continuity_url": reverse("continuity"),
         "open_url": reverse("project-detail", args=[project.pk]),
         "save_url": reverse("project-save", args=[project.pk]),
     })

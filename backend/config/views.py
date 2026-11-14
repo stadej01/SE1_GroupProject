@@ -7,6 +7,7 @@ from django.views.decorators.csrf import csrf_exempt, csrf_protect
 from django.views.decorators.http import require_safe
 
 from accounts.token_cookie import use_token_user
+from editor.views import continuity as editor_continuity
 from editor.views import sync as editor_sync
 
 
@@ -25,6 +26,16 @@ def sync(request):
     if not use_token_user(request).is_authenticated:
         return diagnostic_response("Please log in before parsing.", 401)
     return csrf_protect(editor_sync)(request)
+
+
+@never_cache
+@csrf_exempt
+def continuity(request):
+    # Match /sync: project pages use the shared token-authenticated service,
+    # while the old editor page continues to use editor.urls directly.
+    if not use_token_user(request).is_authenticated:
+        return diagnostic_response("Please log in before checking continuity.", 401)
+    return csrf_protect(editor_continuity)(request)
 
 
 def csrf_failure(request, reason=""):
