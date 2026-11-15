@@ -536,9 +536,10 @@ document.addEventListener("keydown", (event) => {
       (target.isContentEditable ||
        target.closest("input, textarea, [contenteditable]"))
     ) return;
+    
+    event.preventDefault();
 
     if (!leaveGuard?.open && undoStack.length > 0) {
-      event.preventDefault();
       undoLastAction();
     }
     return;
