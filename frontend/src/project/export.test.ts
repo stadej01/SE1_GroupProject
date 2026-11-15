@@ -69,7 +69,7 @@ for (const [error, message, signIn] of [
   [new ProjectRequestError(401), "You are signed out. Nothing was exported.", true],
   [new ProjectRequestError(403, "Not a member"), "You do not have access to export this project.", false],
   [new ProjectRequestError(400), "The editor text could not be sent. Nothing was exported.", false],
-  [new ProjectRequestError(403, "CSRF Failed: CSRF token missing."), "Security check failed. Copy your text, then reload.", false],
+  [new ProjectRequestError(403, "CSRF Failed: CSRF token missing."), "Security check failed. Try reloading the page.", false],
   [new ProjectRequestError(404), "This project no longer exists and cannot be exported.", false],
   [new ProjectRequestError(503), "Project storage is not available right now. Nothing was exported. Try again later.", false],
   [new ProjectRequestError(null), "Could not reach the server. Nothing was exported.", false],
