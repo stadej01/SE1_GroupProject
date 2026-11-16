@@ -69,4 +69,5 @@ def project(request, project_id):
         "sync_url": reverse("sync"),
         "open_url": reverse("project-detail", args=[project.pk]),
         "save_url": reverse("project-save", args=[project.pk]),
+        "export_url": reverse("project-export", args=[project.pk]),
     })

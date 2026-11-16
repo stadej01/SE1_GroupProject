@@ -7,10 +7,10 @@
   {% for stylesheet in assets.styles %}<link rel="stylesheet" href="{{ stylesheet }}">{% endfor %}
 </head>
 <body>
-  <main id="editor" data-sync-url="{{ sync_url }}" data-save-url="{{ save_url }}" data-open-url="{{ open_url }}" data-revision="{{ revision }}" data-csrf-cookie="{{ csrf_cookie_name }}"{% if login_url %} data-login-url="{{ login_url }}"{% endif %}>
+  <main id="editor" data-sync-url="{{ sync_url }}" data-save-url="{{ save_url }}" data-open-url="{{ open_url }}" data-revision="{{ revision }}" data-csrf-cookie="{{ csrf_cookie_name }}"{% if export_url %} data-export-url="{{ export_url }}"{% endif %}{% if login_url %} data-login-url="{{ login_url }}"{% endif %}>
     <header class="app-header">
       <div class="app-identity">{% if project %}<nav aria-label="Project navigation"><a id="back-to-projects" class="back-link" href="{% url 'pages:home' %}">← Projects</a></nav><span class="crumb-separator" aria-hidden="true">/</span>{% endif %}<h1{% if project %} title="{{ project.name }}"{% endif %}>{% if project %}{{ project.name }}{% else %}Dialogue editor{% endif %}</h1></div>
-      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if project %}<form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
+      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if export_url %}<button id="export-button" type="button" disabled>Export JSON</button>{% endif %}{% if project %}<form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
     </header>
     <div id="workspace" class="workspace">
       <section class="source-panel panel" aria-labelledby="source-heading">
@@ -32,6 +32,13 @@
       <h2 id="leave-dialog-title">Save your changes before leaving?</h2>
       <p id="leave-dialog-help">This project has unsaved changes. If you discard them, they cannot be restored.</p>
       <div class="leave-dialog-actions"><button id="leave-discard" type="button">Discard changes</button><button id="leave-cancel" type="button">Cancel</button><button id="leave-save" class="primary" type="button" autofocus>Save and leave</button></div>
+    </dialog>
+    {% endif %}
+    {% if export_url %}
+    <dialog id="export-dialog" class="leave-dialog" aria-labelledby="export-dialog-title" aria-describedby="export-dialog-help">
+      <h2 id="export-dialog-title">Save before exporting?</h2>
+      <p id="export-dialog-help">You have unsaved changes, so this export will not match your last save. Would you like to save first?</p>
+      <div class="leave-dialog-actions"><button id="export-unsaved" type="button">Export without saving</button><button id="export-cancel" type="button">Cancel</button><button id="export-save" class="primary" type="button" autofocus>Save and export</button></div>
     </dialog>
     {% endif %}
   </main>
