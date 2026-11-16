@@ -18,9 +18,7 @@ const source = [
   "Narrator: Untouched."
 ].join("\n");
 
-const undoKey = process.platform === "darwin"
-  ? "Meta+z"
-  : "Control+z";
+const undoKey = "ControlOrMeta+z";
 
 function node(page: Page, id: string) {
   return page.locator(`.react-flow__node[data-id="${id}"]`);
@@ -63,8 +61,20 @@ async function deleteNode(page: Page, id: string) {
 test("US-14 AC1: deletes multiple selected nodes in the GUI", async ({ page }) => {
   await setup(page);
 
+  // Select the first node
   await node(page, "B").click();
+
+  // Close the editor panel without clearing the graph selection
+  await page.getByRole("button", {
+    name: "Close node details"
+  }).click();
+
+  // Add the second node to the selection
   await node(page, "C").click({ modifiers: ["Shift"] });
+
+  // Verify both nodes are selected
+  await expect(deleteButton(page))
+    .toHaveText("Delete selected (2)");
 
   await expect(deleteButton(page))
     .toHaveText("Delete selected (2)");
