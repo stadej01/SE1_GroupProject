@@ -150,12 +150,12 @@ test("US-14 AC3: Delete then Parse then Undo restores both views", async ({ page
     name: "Parse Markdown"
   }).click();
 
+  // Wait until Markdown actually reflects the deletion
+  await expect(page.locator("#markdown-source"))
+    .not.toHaveValue(/^# B$/m);
+
+  // Confirm Node B is also absent from the graph
   await expect(node(page, "B")).toHaveCount(0);
-
-  const deletedSource = await page.locator("#markdown-source")
-    .inputValue();
-
-  expect(deletedSource).not.toMatch(/^# B$/m);
 
   await page.keyboard.press(undoKey);
 
@@ -214,10 +214,12 @@ test("US-14 AC5: deletion is reflected in graph and Markdown after Parse", async
   await expect(page.locator(".react-flow__edge"))
     .toHaveCount(1);
 
+  await expect(page.locator("#markdown-source"))
+  .not.toHaveValue(/^# B$/m);
+
   const updated = await page.locator("#markdown-source")
     .inputValue();
 
-  expect(updated).not.toMatch(/^# B$/m);
   expect(updated).not.toContain('"Go to B" -> B');
   expect(updated).not.toContain('"Finish" -> C');
 
