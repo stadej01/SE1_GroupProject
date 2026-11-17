@@ -1,7 +1,8 @@
-"""Temporary server-rendered project pages for US-37b stage 1."""
+"""Server-rendered home and project pages."""
 
 from django import forms
 from django.conf import settings
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.cache import never_cache
@@ -10,7 +11,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from accounts.token_cookie import token_login_required
 from editor.assets import frontend_assets
-from teams.models import Team
+from teams.forms import NewTeamForm
+from teams.models import Team, TeamMembership
 
 from .models import Project
 
@@ -27,11 +29,21 @@ class NewProjectForm(forms.ModelForm):
         self.fields["team"].empty_label = None
 
 
-def home_response(request, form=None, status=200):
-    teams = Team.objects.filter(memberships__user=request.user).order_by("pk").prefetch_related("projects")
+def member_teams(user):
+    return Team.objects.filter(
+        pk__in=TeamMembership.objects.filter(user=user).values("team")
+    ).order_by("pk")
+
+
+def home_response(request, form=None, team_form=None, status=200):
+    teams = member_teams(request.user).prefetch_related("projects").annotate(
+        member_count=Count("memberships")
+    )
     if form is None:
-        form = NewProjectForm(teams=teams)
-    return render(request, "projects/home.html", {"teams": teams, "form": form}, status=status)
+        form = NewProjectForm(teams=member_teams(request.user))
+    return render(request, "projects/home.html", {
+        "teams": teams, "form": form, "team_form": team_form or NewTeamForm(),
+    }, status=status)
 
 
 @never_cache
@@ -44,8 +56,7 @@ def home(request):
 @token_login_required
 @require_POST
 def create(request):
-    teams = Team.objects.filter(memberships__user=request.user).order_by("pk")
-    form = NewProjectForm(request.POST, teams=teams)
+    form = NewProjectForm(request.POST, teams=member_teams(request.user))
     if form.is_valid():
         project = form.save()
         return redirect("pages:project", project_id=project.pk)
@@ -66,6 +77,7 @@ def project(request, project_id):
         "assets": frontend_assets(),
         "csrf_cookie_name": settings.CSRF_COOKIE_NAME,
         "login_url": reverse("accounts:login"),
+        "home_url": f"{reverse('pages:home')}#team-{project.team_id}",
         "sync_url": reverse("sync"),
         "open_url": reverse("project-detail", args=[project.pk]),
         "save_url": reverse("project-save", args=[project.pk]),
