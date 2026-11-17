@@ -12,6 +12,7 @@ urlpatterns = [
     path("api/v1/", include("projects.urls")),
     path("api/v1/", include("accounts.urls")),
     path("accounts/", include("accounts.page_urls")),
+    path("teams/", include("teams.page_urls")),
     path("sync", sync, name="sync"),
     path("", include("projects.page_urls")),
 ]
