@@ -4,7 +4,7 @@ import { ProjectRequestError } from "./api";
 import { projectErrorNotice } from "./errors";
 
 for (const [name, error, message, signIn] of [
-  ["conflict", new ProjectRequestError(409, "Refresh the page before saving", 9), "A newer version was saved (revision 9). Your text is still here. Copy it, then reload.", false],
+  ["conflict", new ProjectRequestError(409, "Refresh the page before saving", 9), "A newer version was saved (revision 9). Your text is still here. Copy your Markdown or load the latest version.", false],
   ["signed out", new ProjectRequestError(401), "You are signed out. Your text is still here.", true],
   ["CSRF", new ProjectRequestError(403, "CSRF Failed: stale token"), "Security check failed. Copy your text, then reload.", false],
   ["membership", new ProjectRequestError(403, "Not a member"), "You no longer have access to this project. Your text is still here.", false],
@@ -31,6 +31,19 @@ for (const [status, message, signIn] of [
 ] as const) {
   test(`open notice: ${status}`, () => {
     const notice = projectErrorNotice(new ProjectRequestError(status), "open");
+    assert.equal(notice.message, message);
+    assert.equal(Boolean(notice.signIn), signIn);
+  });
+}
+for (const [status, message, signIn] of [
+  [401, "You are signed out. Your text is still here.", true],
+  [403, "You no longer have access to this project. Your text is still here.", false],
+  [503, "Project storage is not available right now. Your text is still here. Try again later.", false],
+  [400, "The latest version could not be loaded. Your text is still here.", false],
+  [null, "Could not reach the server. Your text is still here. Try again.", false],
+] as const) {
+  test(`load latest notice: ${status}`, () => {
+    const notice = projectErrorNotice(new ProjectRequestError(status), "load");
     assert.equal(notice.message, message);
     assert.equal(Boolean(notice.signIn), signIn);
   });
