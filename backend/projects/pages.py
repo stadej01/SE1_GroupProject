@@ -70,4 +70,5 @@ def project(request, project_id):
         "continuity_url": reverse("continuity"),
         "open_url": reverse("project-detail", args=[project.pk]),
         "save_url": reverse("project-save", args=[project.pk]),
+        "export_url": reverse("project-export", args=[project.pk]),
     })
