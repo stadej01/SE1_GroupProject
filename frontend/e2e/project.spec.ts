@@ -184,7 +184,6 @@ test("selecting a node or connection marks its Markdown, and key presses leave t
   await save(page);
   const source = page.locator("#markdown-source");
   const mark = page.locator("#source-line-mark");
-  // Delete and Backspace remove the selection since US-14; us14.spec.ts covers them.
   const pressKeys = async () => {
     for (const key of ["x", "Space", "Enter", "ArrowRight"]) await page.keyboard.press(key);
   };
