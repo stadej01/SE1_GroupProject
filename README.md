@@ -125,7 +125,7 @@ The start script checks the configuration and pending migrations, then runs the 
 ### 6. Create and save your first project
 
 In the browser, choose **Create an account**, enter your details, and submit. Registration creates your personal team.
-**You should see:** **Your projects**, your team, and a **New project** form.
+**You should see:** **Your projects**, your team, a **New project** form, and a **New team** form.
 
 Enter `My first dialogue` as the project name and click **Create project**.
 **You should see:** an empty Markdown box and an empty graph.
@@ -190,7 +190,19 @@ If you pulled new code since the last run, run `./setup.sh` first, or `.\setup.p
 - **Starting nodes** selects conversation entry nodes. **Layout**, under **View**, switches between horizontal and vertical graphs.
 - Drag the line between the two panels to resize them. Double-click it to restore the default width.
 - `Ctrl`/`⌘` + `Enter` parses; `Ctrl`/`⌘` + `S` saves.
-- With unsaved text, graph edits, or moved nodes, **← Projects** asks whether to save or discard. Closing the tab, refreshing, and **Log out** use the browser's own prompt instead.
+- The header shows the project's team and who is signed in. **← Projects** returns to that team on the home page. With unsaved text, graph edits, or moved nodes, it first asks whether to save or discard. Closing the tab, refreshing, and **Log out** use the browser's own prompt instead.
+- If a teammate saved after you opened the project, **Save** (or **Save and leave**) is refused and you stay in the editor with your text, graph edits, and positions. **Copy my Markdown** copies what you were saving, including graph edits not yet shown in the Markdown box; if the browser refuses, the text appears for you to copy by hand. **Load latest version** asks first, then replaces your unsaved Markdown and positions with the saved version. Editing pauses while it loads; if loading fails, nothing changes.
+
+## Teams and members
+
+Every project belongs to a team, and every member of a team can open and save its projects. All members have the same rights.
+
+- **New team** on the home page creates a team with you as its only member.
+- **Members** beside a team opens its page: each member's name and email, with **You** on your own account.
+- **Add member** adds someone who already has an account, by email.
+- **Remove** and **Leave team** ask for confirmation. The person removed, or who left, no longer sees the team or can open or save its projects. An editor they already have open keeps its text, but saving fails.
+- The last member cannot leave or be removed, even when two members try at the same moment.
+- People outside a team get `403` for its page and for any change to its members.
 
 Use `# Node_ID` for a node, `Speaker: text` for dialogue, `* "Choice" -> Node_ID` for a choice, and `<<jump: Node_ID>>` for a jump. Put `<!-- start: Node_ID -->` before the first heading to mark a starting node. See [the merchant sample](fixtures/merchant.md) for a larger dialogue.
 
@@ -258,6 +270,26 @@ python manage.py runserver 127.0.0.1:8766 --settings=config.settings_e2e
 
 **You should see:** the login page at [port 8766](http://127.0.0.1:8766/). This mode uses SQLite and memory storage; saved Markdown lasts for one server run. Close this terminal when finished.
 
+### Team changes at the same moment
+
+SQLite cannot hold row locks between connections, so the tests for two members leaving or removing each other at once skip there. Run them against a local PostgreSQL server where you can create databases. Django creates and drops its own test database, and remote hosts are refused. From `backend/`, with the Python environment active:
+
+```bash
+export INTEGRATION_DATABASE_URL=postgresql://USER@127.0.0.1:5432/postgres
+python manage.py test teams.test_concurrency --settings=config.settings_postgres_test
+```
+
+<details>
+<summary>Windows PowerShell</summary>
+
+```powershell
+$env:INTEGRATION_DATABASE_URL = "postgresql://USER@127.0.0.1:5432/postgres"
+python manage.py test teams.test_concurrency --settings=config.settings_postgres_test
+```
+</details>
+
+**You should see:** `Ran 4 tests` and `OK`.
+
 ### Saves from several backends
 
 SQLite and memory storage cannot prove the locks between backend processes. [This check](backend/tests/integration/check_concurrent_saves.py) starts two backends on a local PostgreSQL database and a test branch of a private repository. Its first lines explain the setup. Never point it at a database or branch that holds real data.
@@ -287,6 +319,7 @@ SQLite and memory storage cannot prove the locks between backend processes. [Thi
 | `config.settings_auth_test` | Automated account and project tests with temporary SQLite |
 | `config.settings_e2e` | Browser checks with file-based SQLite and memory storage |
 | `config.settings_integration` | Lock checks with a local PostgreSQL and a test branch |
+| `config.settings_postgres_test` | Team lock tests with a local PostgreSQL |
 | `config.settings` | Old SQLite editor demo and its tests; `manage.py` default |
 
 `manage.py` alone starts the old demo, so include `--settings=config.settings_neon` when you run it for the full app. Only the test settings use memory storage.
@@ -298,7 +331,7 @@ SQLite and memory storage cannot prove the locks between backend processes. [Thi
 | [setup.sh](setup.sh), [setup.ps1](setup.ps1) | Install dependencies and build the frontend |
 | [start.sh](start.sh), [start.ps1](start.ps1) | Check the configuration and start the full app |
 | [backend/accounts/](backend/accounts/) | Email accounts, token login, and registration |
-| [backend/teams/](backend/teams/) | Teams and membership |
+| [backend/teams/](backend/teams/) | Teams, membership, and the team pages |
 | [backend/projects/](backend/projects/) | Project pages, API, positions, and GitHub storage |
 | [backend/config/](backend/config/) | Settings and shared routes |
 | [backend/editor/](backend/editor/) | Editor page, assets, and parse endpoint |
@@ -396,9 +429,9 @@ order by n.node_id;
 
 **You should see:** one row per saved node, with the project's revision, GitHub commit SHA, and coordinates.
 
-### Add another person to a team
+### Django admin
 
-From `backend/`, with the Python environment active, run `python manage.py createsuperuser --settings=config.settings_neon` on either platform and enter the requested details.
+Members are normally added on the team page. Django admin can also edit teams and memberships. From `backend/`, with the Python environment active, run `python manage.py createsuperuser --settings=config.settings_neon` on either platform and enter the requested details.
 **You should see:** `Superuser created successfully.` Start the service with the Quick start command, then sign in at [Django admin](http://127.0.0.1:8000/admin/).
 
 ![Django admin login](docs/images/project-api/admin-login.png)
@@ -423,7 +456,7 @@ python manage.py reset_dialogue_data --database-host HOST --database-name NAME -
 
 A reset removes the app's files in one ordinary commit, then clears accounts, teams, projects, positions, sessions, and admin logs in one transaction. It keeps the Git history, other files, the schema, migrations, permissions, and ID sequences. It stops if the database or branch changed after the inventory. To recover, restore the backup with `pg_restore` and run `restore_dialogue_files` with the same target and manifest: the two sides must match.
 
-After a reset nobody can sign in. Everyone registers again, and someone must run `createsuperuser` again, as in [Add another person to a team](#add-another-person-to-a-team), before anyone can use Django admin.
+After a reset nobody can sign in. Everyone registers again, and someone must run `createsuperuser` again, as in [Django admin](#django-admin), before anyone can use Django admin.
 
 ### Old SQLite demo
 
@@ -453,4 +486,5 @@ python manage.py runserver 127.0.0.1:8000 --settings=config.settings
 - Browsers do not allow a custom dialog when a tab closes. Only **← Projects** offers save or discard; other ways of leaving use the browser's built-in prompt.
 - Write the first node of a new project in Markdown before adding more nodes through the graph.
 - **Log out** clears the cookie in that browser only. A token copied elsewhere stays valid until it expires.
+- **Add member** tells any signed-in team member whether an email has an account.
 - The service targets local development and demos. Registration is open.

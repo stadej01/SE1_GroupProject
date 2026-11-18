@@ -12,12 +12,12 @@ export default defineConfig({
   projects: [
     {
       name: "editor",
-      testIgnore: "project.spec.ts",
+      testIgnore: ["project.spec.ts", "team.spec.ts"],
       use: { baseURL: "http://127.0.0.1:8765" },
     },
     {
       name: "projects",
-      testMatch: "project.spec.ts",
+      testMatch: ["project.spec.ts", "team.spec.ts"],
       use: { baseURL: "http://127.0.0.1:8766" },
     },
   ],

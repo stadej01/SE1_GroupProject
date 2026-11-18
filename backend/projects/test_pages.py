@@ -94,19 +94,41 @@ class ProjectPageTests(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(Project.objects.count(), 2)
 
-    def test_account_without_team_sees_admin_help(self):
+    def test_account_without_team_can_create_a_team_from_home(self):
         TeamMembership.objects.filter(user=self.user).delete()
         response = self.client.get("/")
-        self.assertContains(response, "Ask an administrator to add you to a team")
-        self.assertContains(response, reverse("admin:index"))
+        self.assertContains(response, "You are not on a team yet.")
+        self.assertContains(response, f'action="{reverse("teams:create")}"')
+        self.assertContains(response, "Create team")
         self.assertNotContains(response, "Create project")
+        self.assertNotContains(response, reverse("admin:index"))
+
+    def test_home_links_each_team_to_its_members_page(self):
+        response = self.client.get("/")
+        self.assertContains(response, f'id="team-{self.team.pk}"')
+        self.assertContains(response, f'href="{reverse("teams:detail", args=[self.team.pk])}"')
+        self.assertContains(response, "Members (1)")
+        self.assertNotContains(response, reverse("teams:detail", args=[self.other_team.pk]))
 
     def test_project_editor_has_back_link_and_leave_dialog(self):
         response = self.client.get(self.project_url())
-        self.assertRegex(response.content.decode(), rf'<a id="back-to-projects"[^>]*href="{reverse("pages:home")}"')
+        self.assertRegex(response.content.decode(), rf'<a id="back-to-projects"[^>]*href="{reverse("pages:home")}#team-{self.team.pk}"')
         self.assertContains(response, 'id="leave-dialog"')
         self.assertContains(response, "Save your changes before leaving?")
         self.assertContains(response, 'id="logout-form"')
+
+    def test_editor_shows_team_and_current_user(self):
+        response = self.client.get(self.project_url())
+        self.assertContains(response, f'<span class="visually-hidden">Team: </span>{self.team.name}</span>', html=False)
+        self.assertContains(response, 'id="current-user"')
+        self.assertContains(response, '<span class="visually-hidden">Signed in as </span>Member</span>')
+
+    def test_editor_has_conflict_recovery_controls(self):
+        response = self.client.get(self.project_url())
+        self.assertRegex(response.content.decode(), r'<section id="conflict-panel"[^>]*hidden')
+        self.assertContains(response, "Copy my Markdown")
+        self.assertContains(response, 'id="load-latest-dialog"')
+        self.assertContains(response, "Your unsaved Markdown and node positions will be replaced")
 
     def test_nonmember_gets_403_without_project_name(self):
         response = self.client.get(self.project_url(self.other_project))
