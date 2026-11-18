@@ -57,6 +57,11 @@ interface Props {
     id: string,
     position: { x: number; y: number }
   ) => void;
+
+  onSelectionChange?: (
+    nodeIds: string[],
+     edgeIds: string[]
+    ) => void;
 }
 
 
@@ -70,6 +75,7 @@ export function DialogueGraph({
   rotateLabels = false,
   onConnectNodes,
   onSelectEdge,
+  onSelectionChange,
   onPaneClick,
 }: Props) {
 
@@ -146,6 +152,13 @@ export function DialogueGraph({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
 
+        onSelectionChange={({ nodes, edges }) => {
+          onSelectionChange?.(
+            nodes.map(node => node.id),
+            edges.map(edge => edge.id)
+          );
+        }}
+
         onEdgeClick={(_, edge) => {
           const original = graph.edges.find(
             item => item.id === edge.id
@@ -156,9 +169,10 @@ export function DialogueGraph({
           }
         }}
 
-        onNodeClick={(_, node) =>
-          onSelectNode(node.data as GraphNode)
-        }
+        onNodeClick={(event, node) => {
+          if (event.shiftKey) return;
+          onSelectNode(node.data as GraphNode);
+        }}
 
         onPaneClick={onPaneClick}
 
@@ -172,6 +186,9 @@ export function DialogueGraph({
         nodesConnectable={Boolean(onConnectNodes)}
         edgesReconnectable={false}
         deleteKeyCode={null}
+
+        multiSelectionKeyCode="Shift"
+        selectionKeyCode="Shift"
 
         fitView
         // Keep the first view clear of the legend in the bottom-right corner.
