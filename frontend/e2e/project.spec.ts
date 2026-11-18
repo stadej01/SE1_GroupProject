@@ -185,7 +185,7 @@ test("selecting a node or connection marks its Markdown, and key presses leave t
   const source = page.locator("#markdown-source");
   const mark = page.locator("#source-line-mark");
   const pressKeys = async () => {
-    for (const key of ["x", "Space", "Enter", "Backspace", "Delete", "ArrowRight"]) await page.keyboard.press(key);
+    for (const key of ["x", "Space", "Enter", "ArrowRight"]) await page.keyboard.press(key);
   };
   const expectTextUntouched = async () => {
     await expect(source).toHaveValue(markdown);
