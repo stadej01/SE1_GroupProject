@@ -1,0 +1,12 @@
+.git
+.env
+.env.*
+**/node_modules
+**/__pycache__
+**/.venv
+backend/staticfiles
+backend/editor/static/editor/dist
+backend/db.sqlite3
+frontend/test-results
+frontend/playwright-report
+history
