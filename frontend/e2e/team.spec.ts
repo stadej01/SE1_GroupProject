@@ -53,9 +53,9 @@ async function addMember(page: Page, email: string) {
 
 async function createProject(page: Page, team: string) {
   const name = `Story ${randomUUID().slice(0, 8)}`;
-  await page.goto("/");
+  await page.getByRole("link", { name: "← Projects", exact: true }).click();
   await page.getByLabel("Project name").fill(name);
-  await page.getByLabel("Team:", { exact: true }).selectOption({ label: team });
+  await expect(page.getByLabel("Team:", { exact: true }).locator("option:checked")).toHaveText(team);
   await page.getByRole("button", { name: "Create project", exact: true }).click();
   await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
   await expect(page.locator("#markdown-source")).toBeEnabled();
@@ -89,6 +89,7 @@ test("a signed-in user creates a team, and a blank name shows an error", async (
     await ada.page.getByRole("button", { name: "Create team", exact: true }).click();
     await expect(ada.page.getByText("Enter a team name.")).toBeVisible();
     const team = await createTeam(ada.page);
+    await expect(ada.page.getByLabel("Team:", { exact: true }).locator("option:checked")).toHaveText(team);
     expect(new URL(ada.page.url()).hash).toMatch(/^#team-\d+$/);
     await expect(ada.page.getByRole("link", { name: `Manage members of ${team}` })).toHaveText("Members (1)");
     await openMembers(ada.page, team);
@@ -132,6 +133,7 @@ test("the editor shows its team and user, and ← Projects returns to that team"
     await owner.page.getByRole("link", { name: "← Projects", exact: true }).click();
     expect(new URL(owner.page.url()).hash).toMatch(/^#team-\d+$/);
     await expect(owner.page.locator(":target h2")).toHaveText(team);
+    await expect(owner.page.getByLabel("Team:", { exact: true }).locator("option:checked")).toHaveText(team);
     await openProject(mate.page, project.url);
     await expect(mate.page.locator("#current-user")).toHaveText(`Signed in as ${mate.name}`);
   } finally {

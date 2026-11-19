@@ -47,4 +47,16 @@
     </section>
   </div>
 </div>
+{% if teams and not form.is_bound %}
+<script>
+  // Team links and the create-team redirect both identify the workspace in the fragment.
+  function selectLinkedTeam() {
+    const select = document.getElementById("{{ form.team.id_for_label }}");
+    const linked = Array.from(select.options).find(option => location.hash === "#team-" + option.value);
+    if (linked) select.value = linked.value;
+  }
+  selectLinkedTeam();
+  window.addEventListener("hashchange", selectLinkedTeam);
+</script>
+{% endif %}
 {% endblock %}
