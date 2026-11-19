@@ -9,6 +9,9 @@ def frontend_assets():
         return None
     with open(manifest_path, encoding="utf-8") as handle:
         manifest = json.load(handle)
+    script = f'editor/dist/{manifest["src/main.tsx"]["file"]}'
+    if not finders.find(script):
+        return None
     styles, visited = [], set()
     def collect(key):
         if key in visited:
@@ -22,4 +25,4 @@ def frontend_assets():
             if url not in styles:
                 styles.append(url)
     collect("src/main.tsx")
-    return {"script": static(f'editor/dist/{manifest["src/main.tsx"]["file"]}'), "styles": styles}
+    return {"script": static(script), "styles": styles}

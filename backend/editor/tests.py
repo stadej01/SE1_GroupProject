@@ -1,12 +1,24 @@
-from django.test import Client, TestCase
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest.mock import patch
+
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 from django.conf import settings
 from .models import Draft
+from .assets import frontend_assets
 
 
 VALID = '# A\nNarrator: Hello.\n* "Go" -> B\n# B\nNarrator: Goodbye.'
 
 class EditorTests(TestCase):
+    @override_settings(CSRF_COOKIE_NAME="custom_demo_csrf")
+    def test_editor_uses_configured_csrf_cookie_without_project_login_url(self):
+        response = self.client.get(reverse("editor:index"))
+        self.assertContains(response, 'data-csrf-cookie="custom_demo_csrf"')
+        self.assertNotContains(response, 'data-login-url=')
+
     def setUp(self):
         self.client = Client(enforce_csrf_checks=True)
         
@@ -28,8 +40,32 @@ class EditorTests(TestCase):
         response = self.client.get(reverse("editor:index"))
         self.assertTemplateUsed(response, "editor/index.html")
         self.assertContains(response, 'id="markdown-source"')
-        self.assertContains(response, 'type="module"')
+        assets = frontend_assets()
+        if assets:
+            self.assertContains(response, f'src="{assets["script"]}"')
+        else:
+            self.assertContains(response, "Frontend assets are missing")
         self.assertNotContains(response, "localhost:5173")
+        self.assertContains(response, 'data-sync-url="/sync"')
+        self.assertContains(response, 'data-save-url="/save"')
+
+    def test_demo_keeps_save_draft_without_project_navigation(self):
+        response = self.client.get(reverse("editor:index"))
+        self.assertContains(response, ">Save draft</button>")
+        self.assertContains(response, "<h1>Dialogue editor</h1>")
+        self.assertNotContains(response, 'id="back-to-projects"')
+        self.assertNotContains(response, 'id="leave-dialog"')
+        self.assertNotContains(response, 'id="logout-form"')
+
+    def test_missing_manifest_or_script_shows_build_hint(self):
+        with TemporaryDirectory() as directory:
+            manifest = Path(directory) / "manifest.json"
+            manifest.write_text(json.dumps({"src/main.tsx": {"file": "assets/missing.js"}}))
+            for files in ([None], [str(manifest), None]):
+                with self.subTest(files=files), patch("editor.assets.finders.find", side_effect=files):
+                    response = self.client.get(reverse("editor:index"))
+                self.assertContains(response, "Frontend assets are missing")
+                self.assertNotContains(response, 'type="module"')
 
     def test_sync_returns_valid_graph_without_saving(self):
         original = Draft.objects.get().markdown_source
