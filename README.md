@@ -10,7 +10,7 @@ People using the editor only register and log in. The database and repository be
 
 ### Before you start
 
-Install Python **3.12** and Node.js **22.12 or newer** (with npm). Create free [Neon](https://console.neon.tech/) and [GitHub](https://github.com/) accounts.
+Install Python **3.12 or newer** and Node.js **22.12 or newer** (with npm). Create free [Neon](https://console.neon.tech/) and [GitHub](https://github.com/) accounts.
 Open one terminal in the repository root: the folder containing `backend/`, `frontend/`, and `.env.example`. Keep this terminal open through all six steps.
 
 ### 1. Install dependencies and build the frontend

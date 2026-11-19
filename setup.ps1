@@ -17,9 +17,14 @@ function Invoke-Checked([scriptblock]$Step) {
   if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
-$pythonRequired = 'Python 3.12 is required. See "Before you start" in README.md.'
+$atLeast312 = "import sys; sys.exit(sys.version_info < (3, 12))"
+$pythonRequired = 'Python 3.12 or newer is required. See "Before you start" in README.md.'
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) { Stop-Setup $pythonRequired }
-py -3.12 -c "pass"
+# Prefer 3.12, the version the team tests on; otherwise use the newest Python 3 if it is new enough.
+# cmd hides the launcher's error when 3.12 is missing; PowerShell 5.1 would stop on redirected stderr.
+cmd /c "py -3.12 -c pass >nul 2>&1"
+$pyVersion = if ($LASTEXITCODE -eq 0) { "-3.12" } else { "-3" }
+py $pyVersion -c $atLeast312
 if ($LASTEXITCODE -ne 0) { Stop-Setup $pythonRequired }
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
   Stop-Setup 'Node.js 22.12 or newer, with npm, is required. See "Before you start" in README.md.'
@@ -31,11 +36,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 if (-not (Test-Path $python)) {
-  Invoke-Checked { py -3.12 -m venv $venv }
+  Invoke-Checked { py $pyVersion -m venv $venv }
 }
-& $python -c "import sys; sys.exit(sys.version_info[:2] != (3, 12))"
+& $python -c $atLeast312
 if ($LASTEXITCODE -ne 0) {
-  Stop-Setup "backend/.venv does not use Python 3.12. Remove that folder and run .\setup.ps1 again."
+  Stop-Setup "backend/.venv uses Python older than 3.12. Remove that folder and run .\setup.ps1 again."
 }
 Invoke-Checked { & $python -m pip install -r (Join-Path $root "backend/requirements.txt") }
 
