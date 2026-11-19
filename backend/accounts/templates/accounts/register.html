@@ -1,0 +1,14 @@
+{% extends "accounts/base.html" %}
+{% block title %}Create an account · Dialogue editor{% endblock %}
+{% block content %}
+<section class="auth-panel panel">
+  <h1>Create an account</h1>
+  <p class="muted">Start with your own team workspace.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="primary" type="submit">Create account</button>
+  </form>
+  <p>Already have an account? <a href="{% url 'accounts:login' %}">Log in</a></p>
+</section>
+{% endblock %}

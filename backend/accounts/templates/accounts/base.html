@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dialogue editor{% endblock %}</title>
+  <style>
+    :root { font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: #202c39; background: #f4f6f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-size: 15px; line-height: 1.5; }
+    a { color: #245c9a; text-underline-offset: 3px; }
+    .site-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 20px max(24px, calc((100vw - 1040px) / 2)); background: #fff; border-bottom: 1px solid #dfe5eb; }
+    .brand { color: inherit; font-size: 18px; font-weight: 650; text-decoration: none; }
+    nav { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; }
+    main { max-width: 1040px; margin: 40px auto; padding: 0 24px; }
+    h1 { font-size: 26px; margin: 0 0 24px; }
+    h2 { font-size: 19px; margin: 0 0 16px; }
+    .auth-panel { max-width: 480px; margin: 0 auto; }
+    .panel { background: #fff; border: 1px solid #dfe5eb; border-radius: 8px; padding: 24px; }
+    .home-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 24px; }
+    .team + .team { margin-top: 28px; }
+    .projects { list-style: none; padding: 0; margin: 0; }
+    .projects li { padding: 12px 0; border-bottom: 1px solid #e4e9ef; }
+    .projects a, h2 { overflow-wrap: anywhere; }
+    label { display: block; margin-bottom: 6px; font-weight: 600; }
+    input, select { width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; border: 1px solid #aebdc9; border-radius: 6px; background: #fff; color: inherit; }
+    button { min-height: 44px; padding: 10px 16px; border: 1px solid #d6dfe7; border-radius: 6px; background: #fff; color: inherit; font: inherit; cursor: pointer; }
+    button:hover { background: #edf2f7; }
+    .primary { background: #245c9a; color: #fff; border-color: #245c9a; }
+    .primary:hover { background: #194b83; }
+    :focus-visible { outline: 3px solid #245c9a; outline-offset: 3px; }
+    .helptext { display: block; color: #536579; font-size: 13px; margin-top: 6px; }
+    form ul { padding-left: 20px; font-size: 13px; }
+    .errorlist { color: #a12636; }
+    .muted { color: #536579; }
+    @media (max-width: 700px) {
+      .site-header { padding: 16px 20px; flex-wrap: wrap; }
+      main { margin: 24px auto; padding: 0 20px; }
+      .home-grid { grid-template-columns: 1fr; }
+      .panel { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="{% url 'pages:home' %}">Dialogue editor</a>
+    {% if user.is_authenticated %}
+    <nav aria-label="Account navigation">
+      <span>{{ user.display_name }}</span>
+      <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>
+    </nav>
+    {% endif %}
+  </header>
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>

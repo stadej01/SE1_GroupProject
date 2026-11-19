@@ -51,11 +51,17 @@ interface Props {
   ) => void;
 
   onSelectEdge?: (edge: GraphEdge) => void;
+  onPaneClick?: () => void;
 
   onMoveNode: (
     id: string,
     position: { x: number; y: number }
   ) => void;
+
+  onSelectionChange?: (
+    nodeIds: string[],
+     edgeIds: string[]
+    ) => void;
 }
 
 
@@ -69,6 +75,8 @@ export function DialogueGraph({
   rotateLabels = false,
   onConnectNodes,
   onSelectEdge,
+  onSelectionChange,
+  onPaneClick,
 }: Props) {
 
   // Convert the graph data into React Flow nodes and edges.
@@ -144,6 +152,13 @@ export function DialogueGraph({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
 
+        onSelectionChange={({ nodes, edges }) => {
+          onSelectionChange?.(
+            nodes.map(node => node.id),
+            edges.map(edge => edge.id)
+          );
+        }}
+
         onEdgeClick={(_, edge) => {
           const original = graph.edges.find(
             item => item.id === edge.id
@@ -154,19 +169,30 @@ export function DialogueGraph({
           }
         }}
 
-        onNodeClick={(_, node) =>
-          onSelectNode(node.data as GraphNode)
-        }
+        onNodeClick={(event, node) => {
+          if (event.shiftKey) return;
+          onSelectNode(node.data as GraphNode);
+        }}
 
-        onNodeDragStop={(_, node) =>
-          onMoveNode(node.id, node.position)
+        onPaneClick={onPaneClick}
+
+        onNodeDragStop={(_, _node, nodes) =>
+          nodes.forEach(node => onMoveNode(node.id, node.position))
+        }
+        onSelectionDragStop={(_, nodes) =>
+          nodes.forEach(node => onMoveNode(node.id, node.position))
         }
 
         nodesConnectable={Boolean(onConnectNodes)}
         edgesReconnectable={false}
         deleteKeyCode={null}
 
+        multiSelectionKeyCode="Shift"
+        selectionKeyCode="Shift"
+
         fitView
+        // Keep the first view clear of the legend in the bottom-right corner.
+        fitViewOptions={{ padding: { top: "5%", right: "10%", bottom: "72px", left: "10%" } }}
         minZoom={0.1}
 
         key={`${graph.snapshot_id}-${vertical}-${rotateLabels}`}
@@ -182,43 +208,49 @@ export function DialogueGraph({
       )}
 
       <div className="dlg-legend" aria-label="Edge legend">
-        <svg width="36" height="8" aria-hidden>
-          <line
-            x1="0"
-            y1="4"
-            x2="36"
-            y2="4"
-            stroke="#3d5a80"
-            strokeWidth="2"
-          />
-        </svg>
-        <span>Player choice</span>
+        <span className="dlg-legend__item">
+          <svg width="28" height="8" aria-hidden>
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="#3d5a80"
+              strokeWidth="2"
+            />
+          </svg>
+          <span>Player choice</span>
+        </span>
 
-        <svg width="36" height="8" aria-hidden>
-          <line
-            x1="0"
-            y1="4"
-            x2="36"
-            y2="4"
-            stroke="#8a5a00"
-            strokeWidth="2"
-          />
-        </svg>
-        <span>Jump (ends the node)</span>
+        <span className="dlg-legend__item">
+          <svg width="28" height="8" aria-hidden>
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="#8a5a00"
+              strokeWidth="2"
+            />
+          </svg>
+          <span>Jump (ends the node)</span>
+        </span>
 
-        <svg width="36" height="8" aria-hidden>
-          <line
-            x1="0"
-            y1="4"
-            x2="36"
-            y2="4"
-            stroke="#8a5a00"
-            strokeWidth="2"
-            strokeDasharray="2 5"
-            strokeLinecap="round"
-          />
-        </svg>
-        <span>Jump (mid-dialogue)</span>
+        <span className="dlg-legend__item">
+          <svg width="28" height="8" aria-hidden>
+            <line
+              x1="0"
+              y1="4"
+              x2="28"
+              y2="4"
+              stroke="#8a5a00"
+              strokeWidth="2"
+              strokeDasharray="2 5"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span>Jump (mid-dialogue)</span>
+        </span>
       </div>
 
       {graph.diagnostics.length > 0 && (

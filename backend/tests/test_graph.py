@@ -130,6 +130,13 @@ class MerchantFixture(unittest.TestCase):
 class EdgeCases(unittest.TestCase):
     """Tests for invalid Markdown, source locations, and graph consistency."""
 
+    def test_unallocated_start_does_not_mark_first_node_as_start(self):
+        """US-12: A node is not a start unless the document designates it."""
+        graph = graph_for("# A\nNarrator: Hello.\n")
+
+        self.assertEqual(graph["start_nodes"], [])
+        self.assertIsNone(graph["start"])
+
     def test_missing_target_blocks_graph(self):
         """US-01 AC2: Links to nonexistent nodes prevent graph generation."""
         with self.assertRaises(GraphValidationError) as caught:

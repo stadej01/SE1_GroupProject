@@ -1,0 +1,9 @@
+{% extends "accounts/base.html" %}
+{% block title %}Access denied · Dialogue editor{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>Access denied</h1>
+  <p>You are not a member of this project's team.</p>
+  <a href="{% url 'pages:home' %}">Back to home</a>
+</div>
+{% endblock %}

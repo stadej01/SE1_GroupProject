@@ -1,15 +1,29 @@
+import json
 import logging
 
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils.http import content_disposition_header
+from django.utils.text import slugify
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from dialogue_graph import (
+    GraphValidationError,
+    compile_to_json,
+    error_log,
+    parse_markdown_to_ast,
+)
 from teams.models import Team
 
 from .models import Project
-from .serializers import ProjectCreateSerializer, ProjectSaveSerializer
+from .serializers import (
+    ProjectCreateSerializer,
+    ProjectExportSerializer,
+    ProjectSaveSerializer,
+)
 from .services import StaleRevision, read_markdown, read_project_snapshot, save_project
 from .storage import ContentStoreError, get_content_store
 
@@ -129,3 +143,57 @@ class ProjectSaveView(APIView):
                 "diagnostics": [],
             }
         )
+
+
+def export_filename(project):
+    return f"{slugify(project.name) or 'dialogue'}.json"
+
+
+def export_response(project, markdown):
+    ast = parse_markdown_to_ast(markdown)
+    try:
+        export, warnings = compile_to_json(ast)
+    except GraphValidationError as failure:
+        return Response(
+            error_log(failure.diagnostics, ast["snapshot_id"]),
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            headers={"Cache-Control": "no-store"},
+        )
+    
+    # Indented so the downloaded file is easy to read; keep non-ASCII text as written.
+    response = HttpResponse(
+        json.dumps(export, indent=2, ensure_ascii=False) + "\n",
+        content_type="application/json; charset=utf-8",
+    )
+    response["Content-Disposition"] = content_disposition_header(
+        True, export_filename(project)
+    )
+    response["X-Dialogue-Warnings"] = json.dumps(warnings)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+class ProjectExportView(APIView):
+    """Compile Markdown into the JSON AST."""
+
+    def get(self, request, project_id):
+        project = get_member_project(request, project_id)
+        project, _ = read_project_snapshot(project)
+        try:
+            markdown = read_markdown(project, get_content_store())
+        except ContentStoreError:
+            logger.warning(
+                "Could not read Markdown to export project %s.",
+                project.pk,
+                exc_info=True,
+            )
+            return Response(
+                CONTENT_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        return export_response(project, markdown)
+
+    def post(self, request, project_id):
+        project = get_member_project(request, project_id)
+        serializer = ProjectExportSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return export_response(project, serializer.validated_data["markdown_source"])

@@ -1,3 +1,4 @@
+<!-- start: Node_Merchant_Greeting -->
 # Node_Merchant_Greeting
 <!-- category: shop, color: blue -->
 <!-- REVIEW (Alex): Interleaved sequence: mutations execute after line 1, auto-jump evaluated after line 2. -->
