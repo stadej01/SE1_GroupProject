@@ -91,9 +91,12 @@ textarea::selection { background: #cde1fb; }
 .connections-panel { grid-template-columns:minmax(0,1fr) minmax(0,1fr); width:min(340px,calc(100vw - 16px)); }
 .connections-panel .panel-row { grid-column:1 / -1; }
 .view-panel { width:220px; }
-.starting-node-picker .toolbar-panel { gap:5px; min-width:220px; max-height:260px; }
-.starting-node-picker legend { padding:0 4px; font-size:11px; color:#63758b; }
-.starting-node-picker .toolbar-panel label { display:flex; align-items:center; gap:6px; font-weight:400; }
+.starting-node-picker .toolbar-panel,
+.end-node-picker .toolbar-panel { gap:5px; min-width:220px; max-height:260px; }
+.starting-node-picker legend,
+.end-node-picker legend { padding:0 4px; font-size:11px; color:#63758b; }
+.starting-node-picker .toolbar-panel label,
+.end-node-picker .toolbar-panel label { display:flex; align-items:center; gap:6px; font-weight:400; }
 .toolbar-note { font-size:11px; line-height:1.4; color:#63758b; }
 #delete-graph-connection { color: #a52635; border-color: #e7aab2; }
 .dlg-node.react-flow__node.selected { outline-color: #f5b800; }

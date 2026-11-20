@@ -20,6 +20,7 @@ def build_graph(ast):
         raise GraphValidationError(diagnostics)
 
     start_nodes = ast.get("start_nodes", [])
+    end_nodes = ast.get("end_nodes", [])
     nodes = []
 
     for node in ast["nodes"]:
@@ -85,6 +86,7 @@ def build_graph(ast):
     return {
         "snapshot_id": ast["snapshot_id"],
         "start_nodes": start_nodes,
+        "end_nodes": end_nodes,
         "start": start_nodes[0] if start_nodes else None,
         "nodes": nodes,
         "edges": edges,
