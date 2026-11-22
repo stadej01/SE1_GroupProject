@@ -173,6 +173,34 @@ class BrokenScriptExport(unittest.TestCase):
         self.assertEqual(log["diagnostics"][0]["line"], None)
         self.assertTrue(log["detected_at"].endswith("Z"))
 
+class US34VariableExport(unittest.TestCase):
+
+    def test_preserves_variable_definitions(self):
+        md = """<!-- start: Node_A -->
+[var: global boolean has_key = false]
+# Node_A
+[var: local integer coins = 10]
+Narrator: Welcome!
+"""
+        export, _ = compile_markdown(md)
+
+        self.assertEqual(export["variables"], [
+            {
+                "name": "has_key",
+                "type": "boolean",
+                "scope": "global",
+                "initial_value": False
+            },
+            {
+                "name": "coins",
+                "type": "integer",
+                "scope": "local",
+                "initial_value": 10,
+                "node_id": "Node_A"
+            }
+        ])
+
+
 
 if __name__ == "__main__":
     unittest.main()
