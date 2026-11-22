@@ -8,6 +8,26 @@ class GraphValidationError(ValueError):
 
 def validate_graph_integrity(ast):
     diagnostics = list(ast.get("diagnostics", []))
+        # US-34: Validate variable initial values
+    for variable in ast.get("variables", []):
+        name = variable["name"]
+        var_type = variable["type"]
+        value = variable["initial_value"]
+
+        if var_type == "integer":
+            valid = re.fullmatch(r"[+-]?[0-9]+", value) is not None
+        elif var_type == "boolean":
+            valid = value.lower() in ("true", "false")
+        else:
+            valid = False
+
+        if not valid:
+            diagnostics.append({
+                "severity": "error",
+                "line": variable["source_line"],
+                "node_id": variable.get("node_id"),
+                "message": f"Variable '{name}' has invalid {var_type} value '{value}'."
+            })
     seen = set()
     for node in ast["nodes"]:
         if node["id"] in seen:
