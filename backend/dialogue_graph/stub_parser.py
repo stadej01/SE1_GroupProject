@@ -135,5 +135,5 @@ def parse_markdown_to_ast(markdown_source):
     if not nodes:
         diagnostics.append({"severity": "error", "line": 1,
                             "message": "Add at least one '# Node_ID' header."})
-    return {"nodes": nodes, "start_nodes": start_nodes, "start_lines": start_lines, "diagnostics": diagnostics,
+    return {"nodes": nodes, "start_nodes": start_nodes, "start_lines": start_lines, "variables": variables, "diagnostics": diagnostics,
             "snapshot_id": hashlib.sha256(markdown_source.encode("utf-8")).hexdigest()}
