@@ -199,6 +199,22 @@ Narrator: Welcome!
                 "node_id": "Node_A"
             }
         ])
+        
+    def test_invalid_integer_fails_with_location(self):
+        md = """<!-- start: Node_A -->
+[var: global integer coins = ten]
+# Node_A
+Narrator: Hello!
+"""
+        _, diagnostics = compile_errors(md)
+
+        error = next(
+            item for item in diagnostics
+            if "coins" in item["message"]
+        )
+
+        self.assertEqual(error["line"], 2)
+        self.assertIn("integer", error["message"])
 
 
 
