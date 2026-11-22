@@ -80,6 +80,7 @@ def compile_to_json(ast):
         "schema_version": SCHEMA_VERSION,
         "snapshot_id": ast["snapshot_id"],
         "start_nodes": list(ast.get("start_nodes", [])),
+        "variables": [_variable(var) for var in ast.get("variables", [])],
         "nodes": [
             {
                 "id": node["id"],
