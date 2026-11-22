@@ -36,6 +36,7 @@ def _metadata(body):
 
 def parse_markdown_to_ast(markdown_source):
     nodes, diagnostics = [], []
+    variables = []
     current = None
     start_nodes, start_lines = [], []
 
@@ -67,6 +68,29 @@ def parse_markdown_to_ast(markdown_source):
                 start_nodes.append(m["id"])
                 start_lines.append(lineno)
             continue
+
+            if m := VARIABLE.match(line):
+                if m["scope"] == "local" and current is None:
+                    diagnostics.append({
+                        "severity": "error",
+                        "line": lineno,
+                        "message": "Local variables must be declared inside a node."
+                    })
+                    continue
+
+                variable = {
+                    "name": m["name"],
+                    "type": m["type"],
+                    "scope": m["scope"],
+                    "initial_value": m["value"].strip(),
+                    "source_line": lineno
+                }
+
+                if m["scope"] == "local":
+                    variable["node_id"] = current["id"]
+
+                variables.append(variable)
+                continue
 
         if current is None:
             diagnostics.append({"severity": "error", "line": lineno,
