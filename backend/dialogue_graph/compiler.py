@@ -44,6 +44,27 @@ def _choice(choice):
         "line_id": choice["line_id"]
     }
 
+def _variable(variable):
+    raw = variable["initial_value"]
+
+    if variable["type"] == "boolean":
+        value = raw.lower() == "true"
+    elif variable["type"] == "integer":
+        value = int(raw)
+    else:
+        value = raw
+
+    result = {
+        "name": variable["name"],
+        "type": variable["type"],
+        "scope": variable["scope"],
+        "initial_value": value
+    }
+
+    if variable["scope"] == "local":
+        result["node_id"] = variable["node_id"]
+
+    return result
 
 def compile_to_json(ast):
     """Return the export for a valid AST.
