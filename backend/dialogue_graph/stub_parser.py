@@ -18,6 +18,12 @@ CHOICE = re.compile(r'^\*\s*' + CONDITION + r'"(?P<text>[^"]*)"\s*->\s*(?P<targe
 JUMP = re.compile(r"^" + CONDITION + r"<<jump:\s*(?P<target>\w+)\s*>>\s*$")
 SET = re.compile(r"^\[set:\s*(?P<var>\w+)\s*=\s*(?P<expr>[^\]]+?)\s*\]\s*$")
 DIALOGUE = re.compile(r"^(?P<speaker>\w[\w ]*?):\s+(?P<text>.+)$")
+VARIABLE = re.compile(
+    r"^\[var:\s*(?P<scope>global|local)\s+"
+    r"(?P<type>boolean|integer)\s+"
+    r"(?P<name>[A-Za-z_]\w*)\s*=\s*"
+    r"(?P<value>[^\]]+?)\s*\]$"
+)
 
 
 def _metadata(body):
