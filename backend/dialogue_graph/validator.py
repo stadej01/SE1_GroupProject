@@ -1,3 +1,4 @@
+import re
 """Structural checks for the temporary parser. Expressions are not evaluated."""
 
 class GraphValidationError(ValueError):
