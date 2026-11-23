@@ -216,6 +216,21 @@ Narrator: Hello!
         self.assertEqual(error["line"], 2)
         self.assertIn("integer", error["message"])
 
+    def test_preserves_string_variable(self):
+        md = """<!-- start: Node_A -->
+[var: global string player_name = "Alex"]
+# Node_A
+Narrator: Welcome!
+"""
+        export, _ = compile_markdown(md)
+
+        self.assertEqual(export["variables"][0], {
+            "name": "player_name",
+            "type": "string",
+            "scope": "global",
+            "initial_value": "Alex"
+        })
+
 
 
 if __name__ == "__main__":
