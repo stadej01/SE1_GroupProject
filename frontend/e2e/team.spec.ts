@@ -88,6 +88,8 @@ test("a signed-in user creates a team, and a blank name shows an error", async (
     await ada.page.getByLabel("Team name").fill("   ");
     await ada.page.getByRole("button", { name: "Create team", exact: true }).click();
     await expect(ada.page.getByText("Enter a team name.")).toBeVisible();
+    await expect(ada.page.getByLabel("Team name")).toBeFocused();
+    await expect(ada.page.getByLabel("Team name")).toHaveAccessibleDescription("Enter a team name.");
     const team = await createTeam(ada.page);
     await expect(ada.page.getByLabel("Team:", { exact: true }).locator("option:checked")).toHaveText(team);
     expect(new URL(ada.page.url()).hash).toMatch(/^#team-\d+$/);
@@ -107,6 +109,8 @@ test("a member adds a registered user who then sees the team and its projects", 
   try {
     await addMember(owner.page, `nobody-${randomUUID()}@example.com`);
     await expect(owner.page.getByText("No account uses this email.")).toBeVisible();
+    await expect(owner.page.getByLabel("Email")).toBeFocused();
+    await expect(owner.page.getByLabel("Email")).toHaveAccessibleDescription(/No account uses this email/);
     await addMember(owner.page, mate.email.toUpperCase());
     await expect(owner.page.getByText(`${mate.name} is already a member of this team.`)).toBeVisible();
     await expect(owner.page.locator(".members li")).toHaveCount(2);

@@ -38,7 +38,8 @@
     <h2 id="add-member-heading">Add member</h2>
     <form method="post" action="{% url 'teams:add-member' team.pk %}" novalidate>
       {% csrf_token %}
-      {{ form.as_p }}
+      {{ form.non_field_errors }}
+      {% include "teams/form_field.html" with field=form.email only %}
       <button class="primary" type="submit">Add member</button>
     </form>
   </section>

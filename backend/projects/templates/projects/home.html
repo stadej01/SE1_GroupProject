@@ -41,7 +41,8 @@
       <h2 id="new-team-heading">New team</h2>
       <form method="post" action="{% url 'teams:create' %}" novalidate>
         {% csrf_token %}
-        {{ team_form.as_p }}
+        {{ team_form.non_field_errors }}
+        {% include "teams/form_field.html" with field=team_form.name only %}
         <button{% if not teams %} class="primary"{% endif %} type="submit">Create team</button>
       </form>
     </section>
