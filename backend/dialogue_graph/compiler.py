@@ -1,3 +1,4 @@
+import json
 """Compile a validated AST into the JSON export.
 
 The export holds narrative data only. Editor data such as source line numbers,
@@ -51,6 +52,8 @@ def _variable(variable):
         value = raw.lower() == "true"
     elif variable["type"] == "integer":
         value = int(raw)
+    elif variable["string"] == "string":
+        value = json.loads(raw)
     else:
         value = raw
 

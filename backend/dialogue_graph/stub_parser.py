@@ -20,7 +20,7 @@ SET = re.compile(r"^\[set:\s*(?P<var>\w+)\s*=\s*(?P<expr>[^\]]+?)\s*\]\s*$")
 DIALOGUE = re.compile(r"^(?P<speaker>\w[\w ]*?):\s+(?P<text>.+)$")
 VARIABLE = re.compile(
     r"^\[var:\s*(?P<scope>global|local)\s+"
-    r"(?P<type>boolean|integer)\s+"
+    r"(?P<type>boolean|integer|string)\s+"
     r"(?P<name>[A-Za-z_]\w*)\s*=\s*"
     r"(?P<value>[^\]]+?)\s*\]$"
 )

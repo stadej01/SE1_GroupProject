@@ -1,4 +1,5 @@
 import re
+import json
 """Structural checks for the temporary parser. Expressions are not evaluated."""
 
 class GraphValidationError(ValueError):
@@ -8,18 +9,25 @@ class GraphValidationError(ValueError):
 
 def validate_graph_integrity(ast):
     diagnostics = list(ast.get("diagnostics", []))
-        # US-34: Validate variable initial values
+    # US-34: Validate variable initial values
     for variable in ast.get("variables", []):
         name = variable["name"]
         var_type = variable["type"]
         value = variable["initial_value"]
 
+        valid = False
+
         if var_type == "integer":
             valid = re.fullmatch(r"[+-]?[0-9]+", value) is not None
-        elif var_type == "boolean":
+
+        if var_type == "boolean":
             valid = value.lower() in ("true", "false")
-        else:
-            valid = False
+
+        if var_type == "string":
+            try:
+                valid = isinstance(json.loads(value), str)
+            except (json.JSONDecodeError, TypeError):
+                valid = False
 
         if not valid:
             diagnostics.append({
