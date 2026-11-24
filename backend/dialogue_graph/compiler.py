@@ -11,29 +11,49 @@ from .validator import GraphValidationError, validate_graph_integrity
 
 SCHEMA_VERSION = "1.0"
 
-
-def _sequence_item(item):
+def _sequence_item(item, variables, node_id):
     """Copy one dialogue line, jump, or mutation without its editor-only line number."""
+
     if item["type"] == "dialogue":
         return {
-            "type": "dialogue", 
+            "type": "dialogue",
             "speaker": item["speaker"],
-            "text": item["text"], 
+            "text": item["text"],
             "line_id": item["line_id"]
         }
+
     if item["type"] == "jump":
         return {
-            "type": "jump", 
-            "target": item["target"], 
+            "type": "jump",
+            "target": item["target"],
             "condition": item["condition"]
         }
+
     if item["type"] == "mutation":
-        return {
-            "type": "mutation", 
-            "op": item["op"], 
-            "var": item["var"], 
+        result = {
+            "type": "mutation",
+            "op": item["op"],
+            "var": item["var"],
             "expr": item["expr"]
         }
+
+        scope = None
+
+        for variable in variables:
+            if variable["name"] != item["var"]:
+                continue
+
+            if variable["scope"] == "global":
+                scope = "global"
+
+            if variable["scope"] == "local" and variable.get("node_id") == node_id:
+                scope = "local"
+                break
+
+        if scope is not None:
+            result["scope"] = scope
+
+        return result
     raise ValueError(f'Unknown sequence item type {item["type"]!r}.')
 
 
@@ -88,7 +108,10 @@ def compile_to_json(ast):
             {
                 "id": node["id"],
                 "metadata": dict(node["metadata"]),
-                "sequence": [_sequence_item(item) for item in node["sequence"]],
+                "sequence": [
+                    _sequence_item(item, ast.get("variables", []), node["id"])
+                    for item in node["sequence"]
+                    ],
                 "choices": [_choice(choice) for choice in node["choices"]],
             }
             for node in ast["nodes"]
