@@ -52,7 +52,7 @@ def _variable(variable):
         value = raw.lower() == "true"
     elif variable["type"] == "integer":
         value = int(raw)
-    elif variable["string"] == "string":
+    elif variable["type"] == "string":
         value = json.loads(raw)
     else:
         value = raw
