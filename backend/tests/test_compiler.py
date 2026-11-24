@@ -231,6 +231,32 @@ Narrator: Welcome!
             "initial_value": "Alex"
         })
 
+    def test_global_variable_shared_across_nodes(self):
+        md = """<!-- start: Node_A -->
+[var: global boolean has_key = false]
+# Node_A
+[set: has_key = true]
+<<jump: Node_B>>
+# Node_B
+[set: has_key = false]
+Narrator: Goodbye!
+"""
+        export, _ = compile_markdown(md)
+
+        node_a = export["nodes"][0]
+        node_b = export["nodes"][1]
+
+        mutation_a = node_a["sequence"][0]
+        mutation_b = node_b["sequence"][0]
+
+        self.assertEqual(mutation_a["var"], "has_key")
+        self.assertEqual(mutation_b["var"], "has_key")
+
+        self.assertEqual(mutation_a["scope"], "global")
+        self.assertEqual(mutation_b["scope"], "global")
+
+        self.assertEqual(len(export["variables"]), 1)
+
 
 
 if __name__ == "__main__":
