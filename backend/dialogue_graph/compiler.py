@@ -56,14 +56,45 @@ def _sequence_item(item, variables, node_id):
         return result
     raise ValueError(f'Unknown sequence item type {item["type"]!r}.')
 
-
-def _choice(choice):
-    return {
-        "text": choice["text"], 
+def _choice(choice, variables, node_id):
+    result = {
+        "text": choice["text"],
         "target": choice["target"],
-        "condition": choice["condition"], 
+        "condition": choice["condition"],
         "line_id": choice["line_id"]
     }
+
+    effects = []
+
+    for effect in choice.get("effects", []):
+        scope = None
+
+        for variable in variables:
+            if variable["name"] != effect["var"]:
+                continue
+
+            if variable["scope"] == "global":
+                scope = "global"
+
+            if variable["scope"] == "local" and variable.get("node_id") == node_id:
+                scope = "local"
+                break
+
+        exported_effect = {
+            "var": effect["var"],
+            "op": effect["op"],
+            "value": int(effect["value"])
+        }
+
+        if scope is not None:
+            exported_effect["scope"] = scope
+
+        effects.append(exported_effect)
+
+    if effects:
+        result["effects"] = effects
+
+    return result
 
 def _variable(variable):
     raw = variable["initial_value"]
@@ -112,7 +143,9 @@ def compile_to_json(ast):
                     _sequence_item(item, ast.get("variables", []), node["id"])
                     for item in node["sequence"]
                     ],
-                "choices": [_choice(choice) for choice in node["choices"]],
+                "choices": [
+                    _choice(choice, ast.get("variables", []), node["id"])
+                    for choice in node["choices"]],
             }
             for node in ast["nodes"]
         ],
