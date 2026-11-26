@@ -24,6 +24,7 @@ VARIABLE = re.compile(
     r"(?P<name>[A-Za-z_]\w*)\s*=\s*"
     r"(?P<value>[^\]]+?)\s*\]$"
 )
+EFFECT = re.compile(r"^\[effect:\s*(?P<var>\w+)\s*-=\s*(?P<value>\d+)\s*\]$")
 
 
 def _metadata(body):
@@ -115,7 +116,22 @@ def parse_markdown_to_ast(markdown_source):
         if m := CHOICE.match(line):
             current["choices"].append({"text": m["text"], "target": m["target"],
                                        "condition": m["cond"], "line_id": line_id,
-                                       "source_line": lineno})
+                                       "source_line": lineno, "effects": []})
+        elif m := EFFECT.match(line):
+            if not current["choices"] or current["choices"][-1]["source_line"] != lineno - 1:
+                diagnostics.append({
+                    "severity": "error",
+                    "line": lineno,
+                    "node_id": current["id"],
+                    "message": "An effect must immediately follow a choice."
+                })
+            else:
+                current["choices"][-1]["effects"].append({
+                    "var": m["var"],
+                    "op": "subtract",
+                    "value": m["value"],
+                    "source_line": lineno
+                })
         elif m := JUMP.match(line):
             current["sequence"].append({"type": "jump", "target": m["target"],
                                         "condition": m["cond"], "source_line": lineno})

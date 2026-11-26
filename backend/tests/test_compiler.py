@@ -257,7 +257,40 @@ Narrator: Goodbye!
 
         self.assertEqual(len(export["variables"]), 1)
 
+    def test_choice_effect_subtracts_coins(self):
+        md = """<!-- start: Node_Shop -->
+[var: global integer coins = 10]
+# Node_Shop
+* "Buy an apple" -> Node_Buy
+[effect: coins -= 5]
+* "Leave" -> Node_Exit
+# Node_Buy
+Narrator: Enjoy your apple!
+# Node_Exit
+Narrator: Goodbye!
+"""
+        export, _ = compile_markdown(md)
 
+        shop = export["nodes"][0]
+        buy = shop["choices"][0]
+        leave = shop["choices"][1]
+
+        # Initial value remains unchanged
+        self.assertEqual(
+            export["variables"][0]["initial_value"], 10
+        )
+
+        # Only buying the apple subtracts coins
+        self.assertEqual(buy["effects"], [
+            {
+                "var": "coins",
+                "scope": "global",
+                "op": "subtract",
+                "value": 5
+            }
+        ])
+
+        self.assertEqual(leave.get("effects", []), [])
 
 if __name__ == "__main__":
     unittest.main()
