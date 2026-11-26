@@ -53,6 +53,43 @@ def validate_graph_integrity(ast):
             if not choice["text"].strip():
                 diagnostics.append({"severity": "error", "line": choice["source_line"],
                     "node_id": node["id"], "message": "A choice must have nonblank text."})
+             # US-34 AC5: Validate choice effect types
+            for effect in choice.get("effects", []):
+                variable = None
+
+                # Find a matching global variable
+                for var in ast.get("variables", []):
+                    if var["name"] == effect["var"] and var["scope"] == "global":
+                        variable = var
+
+                # A matching local variable takes priority
+                for var in ast.get("variables", []):
+                    if (var["name"] == effect["var"]
+                        and var["scope"] == "local"
+                        and var.get("node_id") == node["id"]):
+                        variable = var
+
+                if variable is None:
+                    diagnostics.append({
+                        "severity": "error",
+                        "line": choice["source_line"],
+                        "node_id": node["id"],
+                        "message": f"Choice '{choice['text']}' references undeclared variable '{effect['var']}'."
+                    })
+                    continue
+
+                if effect["op"] == "subtract" and variable["type"] != "integer":
+                    diagnostics.append({
+                        "severity": "error",
+                        "line": choice["source_line"],
+                        "node_id": node["id"],
+                        "message": (
+                            f"Choice '{choice['text']}' cannot subtract from "
+                            f"{variable['type']} variable '{effect['var']}'. "
+                            f"Effect is on line {effect['source_line']}; "
+                            "subtraction requires an integer."
+                        )
+                    })
     start_nodes = ast.get("start_nodes", [])
     if not start_nodes:
         diagnostics.append({"severity": "warning",
