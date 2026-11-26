@@ -292,5 +292,26 @@ Narrator: Goodbye!
 
         self.assertEqual(leave.get("effects", []), [])
 
+    def test_invalid_boolean_choice_effect(self):
+        md = """<!-- start: Node_A -->
+[var: global boolean has_key = false]
+# Node_A
+* "Use key" -> Node_B
+[effect: has_key -= 5]
+# Node_B
+Narrator: Goodbye!
+"""
+        _, diagnostics = compile_errors(md)
+
+        error = next(
+            item for item in diagnostics
+            if "has_key" in item["message"]
+        )
+
+        self.assertEqual(error["line"], 4)
+        self.assertEqual(error["node_id"], "Node_A")
+        self.assertIn("boolean", error["message"])
+        self.assertIn("Use key", error["message"])
+
 if __name__ == "__main__":
     unittest.main()
