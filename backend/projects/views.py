@@ -3,6 +3,7 @@ import logging
 
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from django.utils.http import content_disposition_header
 from django.utils.text import slugify
 from rest_framework import status
@@ -18,11 +19,14 @@ from dialogue_graph import (
 )
 from teams.models import Team
 
-from .models import Project
+from .models import Comment, Project
 from .serializers import (
+    CommentCreateSerializer,
+    CommentUpdateSerializer,
     ProjectCreateSerializer,
     ProjectExportSerializer,
     ProjectSaveSerializer,
+    comment_payload,
 )
 from .services import StaleRevision, read_markdown, read_project_snapshot, save_project
 from .storage import ContentStoreError, get_content_store
@@ -45,6 +49,11 @@ def layout_data(positions):
         for position in positions
     ]
     return {"nodes": nodes}
+
+
+def project_comments(project):
+    comments = project.comments.select_related("author").order_by("created_at", "id")
+    return [comment_payload(comment) for comment in comments]
 
 
 class ProjectCreateView(APIView):
@@ -96,7 +105,7 @@ class ProjectDetailView(APIView):
                 "markdown_source": markdown,
                 "revision": project.revision,
                 "layout_data": layout_data(positions),
-                "comments": [],
+                "comments": project_comments(project),
             }
         )
 
@@ -143,6 +152,73 @@ class ProjectSaveView(APIView):
                 "diagnostics": [],
             }
         )
+
+
+class ProjectCommentsView(APIView):
+    def get(self, request, project_id):
+        project = get_member_project(request, project_id)
+        return Response({"comments": project_comments(project)})
+
+    def post(self, request, project_id):
+        project = get_member_project(request, project_id)
+        serializer = CommentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        project, _ = read_project_snapshot(project)
+        try:
+            markdown = read_markdown(project, get_content_store())
+        except ContentStoreError:
+            logger.warning(
+                "Could not read Markdown to comment on project %s.",
+                project.pk,
+                exc_info=True,
+            )
+            return Response(
+                CONTENT_UNAVAILABLE, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        node_ids = {node["id"] for node in parse_markdown_to_ast(markdown)["nodes"]}
+        if data["node_id"] not in node_ids:
+            return Response(
+                {"detail": "Save the project before commenting on this node."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        comment = Comment.objects.create(
+            project=project,
+            node_id=data["node_id"],
+            author=request.user,
+            body=data["body"],
+        )
+        return Response(comment_payload(comment), status=status.HTTP_201_CREATED)
+
+
+class ProjectCommentDetailView(APIView):
+    """Only a comment's author can edit or delete it."""
+
+    def get_own_comment(self, request, project_id, comment_id):
+        project = get_member_project(request, project_id)
+        comment = get_object_or_404(
+            Comment.objects.select_related("author"), pk=comment_id, project=project
+        )
+        if comment.author_id != request.user.pk:
+            raise PermissionDenied("Only the author can change this comment.")
+        return comment
+
+    def put(self, request, project_id, comment_id):
+        comment = self.get_own_comment(request, project_id, comment_id)
+        serializer = CommentUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        comment.body = serializer.validated_data["body"]
+        comment.edited_at = timezone.now()
+        comment.save(update_fields=["body", "edited_at"])
+        return Response(comment_payload(comment))
+
+    def delete(self, request, project_id, comment_id):
+        comment = self.get_own_comment(request, project_id, comment_id)
+        comment_id = comment.pk
+        comment.delete()
+        return Response({"message": f"Comment {comment_id} successfully deleted."})
 
 
 def export_filename(project):

@@ -28,6 +28,7 @@ BUSINESS_TABLES = (
     "django_admin_log",
     "django_session",
     "projects_nodeposition",
+    "projects_comment",
     "projects_project",
     "teams_teammembership",
     "teams_team",

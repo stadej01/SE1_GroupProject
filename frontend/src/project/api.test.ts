@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { openProject, saveProject, ProjectRequestError } from "./api";
+import { createComment, deleteComment, listComments, openProject, saveProject, updateComment, ProjectRequestError } from "./api";
 
 test("open accepts a project response without an ok field", async t => {
   const snapshot = { markdown_source: "# A\r\nHello", revision: 7, layout_data: { nodes: [] } };
@@ -66,6 +66,55 @@ test("HTML failure keeps status without exposing HTML in detail", async t => {
     assert.equal(error.status, 500);
     assert.equal(error.isJson, false);
     assert.equal(error.detail, null);
+    return true;
+  });
+});
+
+const sampleComment = { comment_id: "c1", project_id: "p1", node_id: "Node_1", author_id: 3, author_name: "Reviewer",
+  body: "Check the tone.", created_at: "2026-11-22T10:00:00Z", edited_at: null };
+
+test("listComments reads the comments list", async t => {
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    assert.equal(url, "/projects/1/comments");
+    assert.equal(init.method, "GET");
+    return Response.json({ comments: [sampleComment] });
+  });
+  assert.deepEqual(await listComments("/projects/1/comments"), [sampleComment]);
+});
+
+test("createComment posts the node and body with the CSRF token", async t => {
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    assert.equal(url, "/projects/1/comments");
+    assert.equal(init.method, "POST");
+    assert.equal(new Headers(init.headers).get("X-CSRFToken"), "test-csrf");
+    assert.deepEqual(JSON.parse(init.body as string), { node_id: "Node_1", body: "Check the tone." });
+    return Response.json(sampleComment, { status: 201 });
+  });
+  assert.deepEqual(await createComment("/projects/1/comments", "test-csrf", "Node_1", "Check the tone."), sampleComment);
+});
+
+test("updateComment and deleteComment address one comment", async t => {
+  const calls: [string, string | undefined, unknown][] = [];
+  t.mock.method(globalThis, "fetch", async (url: string, init: RequestInit) => {
+    assert.equal(new Headers(init.headers).get("X-CSRFToken"), "test-csrf");
+    calls.push([url, init.method, init.body === undefined ? undefined : JSON.parse(init.body as string)]);
+    return init.method === "PUT" ? Response.json({ ...sampleComment, body: "Edited" })
+      : Response.json({ message: "Comment c1 successfully deleted." });
+  });
+  assert.equal((await updateComment("/projects/1/comments", "test-csrf", "c1", "Edited")).body, "Edited");
+  await deleteComment("/projects/1/comments", "test-csrf", "c1");
+  assert.deepEqual(calls, [
+    ["/projects/1/comments/c1", "PUT", { body: "Edited" }],
+    ["/projects/1/comments/c1", "DELETE", undefined],
+  ]);
+});
+
+test("createComment keeps the 404 for an unsaved node", async t => {
+  t.mock.method(globalThis, "fetch", async () =>
+    Response.json({ detail: "Save the project before commenting on this node." }, { status: 404 }));
+  await assert.rejects(createComment("/projects/1/comments", "csrf", "New", "Hi"), error => {
+    assert.ok(error instanceof ProjectRequestError);
+    assert.equal(error.status, 404);
     return true;
   });
 });

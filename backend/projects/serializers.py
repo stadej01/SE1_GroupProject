@@ -41,3 +41,27 @@ class ProjectSaveSerializer(serializers.Serializer):
 
 class ProjectExportSerializer(serializers.Serializer):
     markdown_source = serializers.CharField(allow_blank=True, trim_whitespace=False)
+
+
+COMMENT_MAX_LENGTH = 5000
+
+
+class CommentUpdateSerializer(serializers.Serializer):
+    body = serializers.CharField(max_length=COMMENT_MAX_LENGTH)
+
+
+class CommentCreateSerializer(CommentUpdateSerializer):
+    node_id = serializers.CharField(max_length=200)
+
+
+def comment_payload(comment):
+    return {
+        "comment_id": comment.pk,
+        "project_id": comment.project_id,
+        "node_id": comment.node_id,
+        "author_id": comment.author_id,
+        "author_name": comment.author.display_name,
+        "body": comment.body,
+        "created_at": comment.created_at,
+        "edited_at": comment.edited_at,
+    }

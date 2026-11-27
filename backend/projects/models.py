@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 from teams.models import Team
@@ -50,3 +51,29 @@ class NodePosition(models.Model):
 
     def __str__(self):
         return f"{self.node_id} ({self.x}, {self.y})"
+
+
+class Comment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="comments"
+    )
+    node_id = models.CharField(max_length=200)
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="node_comments",
+        editable=False,
+    )
+    body = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    edited_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        indexes = [
+            models.Index(fields=["project", "node_id"], name="comment_project_node"),
+        ]
+
+    def __str__(self):
+        return f"Comment on {self.node_id} by {self.author_id}"

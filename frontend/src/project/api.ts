@@ -1,9 +1,21 @@
 import type { LayoutData } from "./layout";
 
+export interface NodeComment {
+  comment_id: string;
+  project_id: string;
+  node_id: string;
+  author_id: number;
+  author_name: string;
+  body: string;
+  created_at: string;
+  edited_at: string | null;
+}
+
 export interface ProjectSnapshot {
   markdown_source: string;
   revision: number;
   layout_data: LayoutData;
+  comments?: NodeComment[];
 }
 
 export interface SaveProject {
@@ -56,4 +68,30 @@ export function saveProject(url: string, csrf: string, body: SaveProject): Promi
     headers: { "Content-Type": "application/json", "X-CSRFToken": csrf, Accept: "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+function writeRequest(method: string, csrf: string, body?: object): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json", "X-CSRFToken": csrf, Accept: "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  };
+}
+
+export async function listComments(commentsUrl: string): Promise<NodeComment[]> {
+  const reply = await projectRequest<{ comments: NodeComment[] }>(commentsUrl,
+    { method: "GET", headers: { Accept: "application/json" } });
+  return reply.comments;
+}
+
+export function createComment(commentsUrl: string, csrf: string, nodeId: string, body: string): Promise<NodeComment> {
+  return projectRequest(commentsUrl, writeRequest("POST", csrf, { node_id: nodeId, body }));
+}
+
+export function updateComment(commentsUrl: string, csrf: string, commentId: string, body: string): Promise<NodeComment> {
+  return projectRequest(`${commentsUrl}/${encodeURIComponent(commentId)}`, writeRequest("PUT", csrf, { body }));
+}
+
+export function deleteComment(commentsUrl: string, csrf: string, commentId: string): Promise<{ message: string }> {
+  return projectRequest(`${commentsUrl}/${encodeURIComponent(commentId)}`, writeRequest("DELETE", csrf));
 }

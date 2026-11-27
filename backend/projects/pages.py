@@ -70,4 +70,6 @@ def project(request, project_id):
         "open_url": reverse("project-detail", args=[project.pk]),
         "save_url": reverse("project-save", args=[project.pk]),
         "export_url": reverse("project-export", args=[project.pk]),
+        "comments_url": reverse("project-comments", args=[project.pk]),
+        "user_id": request.user.pk,
     })
