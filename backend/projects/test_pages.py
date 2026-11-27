@@ -131,6 +131,8 @@ class ProjectPageTests(TestCase):
         self.assertContains(response, f'data-open-url="/api/v1/projects/{self.project.pk}"')
         self.assertContains(response, f'data-save-url="/api/v1/projects/{self.project.pk}/save"')
         self.assertContains(response, f'data-export-url="/api/v1/projects/{self.project.pk}/export"')
+        self.assertContains(response, f'data-comments-url="/api/v1/projects/{self.project.pk}/comments"')
+        self.assertContains(response, f'data-user-id="{self.user.pk}"')
         self.assertContains(response, 'id="export-button"')
         self.assertContains(response, 'id="export-dialog"')
         self.assertContains(response, 'data-revision="1"')

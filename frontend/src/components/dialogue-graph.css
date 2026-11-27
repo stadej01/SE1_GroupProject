@@ -6,6 +6,8 @@
 }
 .dlg-node__id { min-width: 0; padding: 2px 6px; border-radius: 4px; font-weight: 600; font-size: 13px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dlg-node__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.dlg-node__comments { flex: none; display: inline-flex; align-items: center; gap: 3px; margin-left: auto; color: #1e4f7a; background: #e4eef8; border-radius: 4px; padding: 1px 5px; font-size: 10px; font-weight: 600; }
+.dlg-node__comments-icon { width: 12px; height: 12px; flex: none; }
 .dlg-node__start { flex: none; color: #176345; background: #e2f4e9; border-radius: 4px; padding: 2px 5px; font-size: 9px; font-weight: 700; letter-spacing: .5px; }
 .dlg-node__preview { font-size: 12px; line-height: 19px; color: #4b5563;
   white-space: pre-wrap; overflow-wrap: anywhere; }

@@ -19,4 +19,14 @@ urlpatterns = [
         views.ProjectExportView.as_view(),
         name="project-export",
     ),
+    path(
+        "projects/<uuid:project_id>/comments",
+        views.ProjectCommentsView.as_view(),
+        name="project-comments",
+    ),
+    path(
+        "projects/<uuid:project_id>/comments/<uuid:comment_id>",
+        views.ProjectCommentDetailView.as_view(),
+        name="project-comment-detail",
+    ),
 ]

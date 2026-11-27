@@ -2,7 +2,7 @@ import "vite/modulepreload-polyfill";
 import { createRoot } from "react-dom/client";
 import type { Diagnostic, DialogueGraph as Graph, GraphNode, GraphEdge } from "./graph/contract";
 import { DialogueGraph } from "./components/DialogueGraph";
-import { EditingNodeContext } from "./components/DialogueNode";
+import { CommentCountContext, EditingNodeContext } from "./components/DialogueNode";
 import { sourceRange } from "./editor/source";
 import { patchNodeSource } from "./editor/patchNode";
 import { appendNode, appendConnection, removeConnection, locateNode, setStartNodes } from "./editor/graphEdits";
@@ -10,13 +10,14 @@ import { createStore, initializeEditor } from "./project/store";
 import { applyLayout } from "./project/layout";
 import { readCsrfToken } from "./project/csrf";
 import { isDirty, canApplySubmittedSource } from "./project/dirty";
-import { ProjectRequestError } from "./project/api";
+import { ProjectRequestError, createComment, deleteComment, listComments, updateComment, type NodeComment } from "./project/api";
+import { byNode, canModify, commentCounts, commentErrorMessage, commentStore, hasUnsentText, remove, upsert, type CommentOperation } from "./project/comments";
 import { projectErrorNotice } from "./project/errors";
 import { showErrorNotice } from "./project/status";
 import { createRequest } from "./project/request";
 import { mountPanelDivider } from "./project/panelDivider";
 import { mountToolbarMenus } from "./project/toolbarMenus";
-import { mountLeaveDialog } from "./project/leaveDialog";
+import { mountLeaveDialog, shouldConfirmLeave } from "./project/leaveDialog";
 import { deleteSelection, inspectDeletion } from "./editor/deleteSelection";
 import { ExportBlockedError, downloadBlob, exportErrorNotice, exportProject } from "./project/export";
 import { askExportChoice } from "./project/exportDialog";
@@ -74,6 +75,17 @@ let positionVersion = 0;
 let savedPositionVersion = 0;
 let activeSave: Promise<boolean> | null = null;
 let leavingAfterSave = false;
+// US-13: review comments save on their own. They are not part of the graph,
+// the pending Markdown, or Undo, so they never count as unsaved changes.
+const commentsUrl = app.dataset.openUrl ? app.dataset.commentsUrl : undefined;
+const currentUserId = app.dataset.userId ? Number(app.dataset.userId) : null;
+let comments = commentStore();
+// Unsent text stays here when the user looks at another node.
+const commentDrafts = { added: new Map<string, string>(), edited: new Map<string, string>() };
+let discardingComments = false;
+function hasUnsentComment() {
+  return hasUnsentText(commentDrafts, comments, editingGraph && new Set(editingGraph.nodes.map(node => node.id)));
+}
 
 type UndoSnapshot = {
   graph: Graph;
@@ -169,7 +181,7 @@ function graphChanged(message: string) {
 function renderGraph() {
   refreshConnectionOptions();
   if (!editingGraph) return;
-  root.render(<EditingNodeContext.Provider value={nodePanel.hidden ? null : selectedNodeId}><DialogueGraph key={graphRenderVersion + (verticalLayout ? 100000 : 0) + (rotateLabels ? 200000 : 0)} graph={editingGraph} savedPositions={positions}
+  root.render(<CommentCountContext.Provider value={commentCounts(comments.values())}><EditingNodeContext.Provider value={nodePanel.hidden ? null : selectedNodeId}><DialogueGraph key={graphRenderVersion + (verticalLayout ? 100000 : 0) + (rotateLabels ? 200000 : 0)} graph={editingGraph} savedPositions={positions}
   vertical={verticalLayout} rotateLabels={rotateLabels}
   onSelectEdge={selectEdge}
   onSelectionChange={(nodes, edges) => {
@@ -188,7 +200,7 @@ function renderGraph() {
       try {
         createConnection(from, to, kind, label);
       } catch (e) { window.alert(e instanceof Error ? e.message : "Cannot connect nodes"); }
-    }} /></EditingNodeContext.Provider>);
+    }} /></EditingNodeContext.Provider></CommentCountContext.Provider>);
 }
 
 function selectEdge(edge: GraphEdge) {
@@ -523,6 +535,14 @@ saveButton.addEventListener("click", () => { void save(); });
 exportButton?.addEventListener("click", () => { void exportJson(); });
 const backLink = document.querySelector<HTMLAnchorElement>("#back-to-projects");
 const leaveDialog = document.querySelector<HTMLDialogElement>("#leave-dialog");
+// Ask before the leave dialog opens; saving the project does not send comments.
+backLink?.addEventListener("click", event => {
+  if (!shouldConfirmLeave(event, hasUnsentComment())) return;
+  discardingComments = window.confirm("You have a comment that is not sent. Leave without it?");
+  if (!discardingComments) { event.preventDefault(); event.stopImmediatePropagation(); }
+});
+leaveDialog?.addEventListener("close", () => { discardingComments = false; });
+window.addEventListener("pageshow", event => { if (event.persisted) discardingComments = false; });
 const leaveGuard = backLink && leaveDialog
   ? mountLeaveDialog({ link: backLink, dialog: leaveDialog, hasUnsavedChanges, save: saveBeforeLeaving })
   : null;
@@ -598,7 +618,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("beforeunload", (event) => {
-  if (hasUnsavedChanges() && !leaveGuard?.confirmed) { event.preventDefault(); event.returnValue = ""; }
+  if (hasUnsavedChanges() && !leaveGuard?.confirmed || hasUnsentComment() && !discardingComments) { event.preventDefault(); event.returnValue = ""; }
 });
 mountPanelDivider(element("workspace"), element("panel-divider"));
 updateLines();
@@ -646,6 +666,12 @@ function showNodeEditor(node: GraphNode) {
   for (const [k, v] of Object.entries(metadata)) if (k !== "speaker" && k !== "audience") fieldInput(k, v);
   nodeEditError.textContent = "";
   appliedFormValues = formValues();
+  if (commentsNodeId !== node.id) {
+    commentsNodeId = node.id;
+    newCommentInput.value = commentDrafts.added.get(node.id) ?? "";
+    commentError.textContent = "";
+  }
+  renderComments();
   renderGraph();
 }
 nodePanel.querySelector("#add-node-field")!.addEventListener("click", () => fieldInput("", ""));
@@ -680,6 +706,178 @@ editForm.addEventListener("submit", event => {
     appliedFormValues = formValues();
   } catch (error) { nodeEditError.textContent = error instanceof Error ? error.message : "Unable to edit node"; }
 });
+
+// review comments are below the form so "Apply to Markdown" never submits them.
+// Bodies are written with textContent: they come from other users.
+const commentSection = document.createElement("section");
+commentSection.id = "node-comments";
+commentSection.className = "node-comments";
+commentSection.setAttribute("aria-labelledby", "node-comments-heading");
+commentSection.hidden = !commentsUrl;
+commentSection.innerHTML = `<header class="node-comments-header"><h4 id="node-comments-heading">Comments</h4><button type="button" id="refresh-comments">Refresh comments</button></header><ul id="node-comment-list" class="node-comment-list"></ul><p id="node-comments-empty" class="node-comments-empty">No comments on this node yet.</p><label>Add a comment<textarea id="new-comment" rows="3" maxlength="5000"></textarea></label><div class="node-edit-actions"><button type="button" id="add-comment">Add comment</button></div><p id="node-comment-error" aria-live="assertive"></p>`;
+nodePanel.append(commentSection);
+const commentList = commentSection.querySelector<HTMLUListElement>("#node-comment-list")!;
+const commentsEmpty = commentSection.querySelector<HTMLElement>("#node-comments-empty")!;
+const newCommentInput = commentSection.querySelector<HTMLTextAreaElement>("#new-comment")!;
+const addCommentButton = commentSection.querySelector<HTMLButtonElement>("#add-comment")!;
+const refreshCommentsButton = commentSection.querySelector<HTMLButtonElement>("#refresh-comments")!;
+const commentError = commentSection.querySelector<HTMLElement>("#node-comment-error")!;
+let commentsNodeId: string | null = null;
+
+function commentsChanged(next: typeof comments) {
+  comments = next;
+  renderComments();
+  renderGraph();
+}
+
+function commentItem(comment: NodeComment) {
+  const item = document.createElement("li");
+  item.className = "node-comment";
+  item.dataset.commentId = comment.comment_id;
+  const meta = document.createElement("div");
+  meta.className = "node-comment-meta";
+  const author = document.createElement("strong");
+  author.textContent = comment.author_name;
+  const time = document.createElement("time");
+  time.dateTime = comment.created_at;
+  time.textContent = new Date(comment.created_at).toLocaleString();
+  meta.append(author, time);
+  if (comment.edited_at) {
+    const edited = document.createElement("span");
+    edited.className = "node-comment-edited";
+    edited.textContent = "(edited)";
+    edited.title = `Edited ${new Date(comment.edited_at).toLocaleString()}`;
+    meta.append(edited);
+  }
+  item.append(meta);
+
+  const own = canModify(comment, currentUserId);
+  const draft = commentDrafts.edited.get(comment.comment_id);
+  if (own && draft !== undefined) {
+    const input = document.createElement("textarea");
+    input.rows = 3;
+    input.maxLength = 5000;
+    input.value = draft;
+    input.setAttribute("aria-label", "Edit comment");
+    input.addEventListener("input", () => { commentDrafts.edited.set(comment.comment_id, input.value); });
+    const actions = document.createElement("div");
+    actions.className = "node-comment-actions";
+    const saveEdit = commentButton("Save", () => void submitCommentEdit(comment.comment_id, saveEdit));
+    const cancel = commentButton("Cancel", () => { commentDrafts.edited.delete(comment.comment_id); commentError.textContent = ""; renderComments(); });
+    actions.append(saveEdit, cancel);
+    item.append(input, actions);
+    return item;
+  }
+
+  const body = document.createElement("p");
+  body.className = "node-comment-body";
+  body.textContent = comment.body;
+  item.append(body);
+  if (own) {
+    const actions = document.createElement("div");
+    actions.className = "node-comment-actions";
+    actions.append(
+      commentButton("Edit", () => {
+        commentDrafts.edited.set(comment.comment_id, comment.body);
+        commentError.textContent = "";
+        renderComments();
+        commentList.querySelector<HTMLTextAreaElement>(`[data-comment-id="${comment.comment_id}"] textarea`)?.focus();
+      }),
+      commentButton("Delete", button => void removeComment(comment.comment_id, button)),
+    );
+    item.append(actions);
+  }
+  return item;
+}
+
+function commentButton(label: string, onClick: (button: HTMLButtonElement) => void) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.textContent = label;
+  button.addEventListener("click", () => onClick(button));
+  return button;
+}
+
+function renderComments() {
+  if (!commentsUrl || commentsNodeId === null) return;
+  const list = byNode(comments.values()).get(commentsNodeId) ?? [];
+  commentList.replaceChildren(...list.map(commentItem));
+  commentsEmpty.hidden = list.length > 0;
+}
+
+// A late reply must not show its error under another node.
+function showCommentError(nodeId: string | null, error: unknown, operation: CommentOperation) {
+  if (commentsNodeId === nodeId) commentError.textContent = commentErrorMessage(error, operation);
+}
+
+async function addComment() {
+  const nodeId = commentsNodeId;
+  const body = newCommentInput.value;
+  if (!commentsUrl || nodeId === null) return;
+  if (!body.trim()) { commentError.textContent = "Write a comment before adding it."; return; }
+  addCommentButton.disabled = true;
+  commentError.textContent = "";
+  try {
+    const created = await createComment(commentsUrl, getCsrfToken(), nodeId, body);
+    // Keep anything typed while the request was running.
+    if (commentDrafts.added.get(nodeId) === body) {
+      commentDrafts.added.delete(nodeId);
+      if (commentsNodeId === nodeId) newCommentInput.value = "";
+    }
+    commentsChanged(upsert(comments, created));
+  } catch (error) {
+    showCommentError(nodeId, error, "add");
+  } finally { addCommentButton.disabled = false; }
+}
+
+async function submitCommentEdit(commentId: string, button: HTMLButtonElement) {
+  const nodeId = commentsNodeId;
+  const body = commentDrafts.edited.get(commentId);
+  if (!commentsUrl || body === undefined) return;
+  if (!body.trim()) { commentError.textContent = "Write a comment before saving it."; return; }
+  button.disabled = true;
+  commentError.textContent = "";
+  try {
+    const updated = await updateComment(commentsUrl, getCsrfToken(), commentId, body);
+    if (commentDrafts.edited.get(commentId) === body) commentDrafts.edited.delete(commentId);
+    commentsChanged(upsert(comments, updated));
+  } catch (error) {
+    showCommentError(nodeId, error, "edit");
+    button.disabled = false;
+  }
+}
+
+async function removeComment(commentId: string, button: HTMLButtonElement) {
+  const nodeId = commentsNodeId;
+  if (!commentsUrl || !window.confirm("Delete this comment? This cannot be undone.")) return;
+  button.disabled = true;
+  commentError.textContent = "";
+  try {
+    await deleteComment(commentsUrl, getCsrfToken(), commentId);
+    commentsChanged(remove(comments, commentId));
+  } catch (error) {
+    showCommentError(nodeId, error, "delete");
+    button.disabled = false;
+  }
+}
+
+async function refreshComments() {
+  const nodeId = commentsNodeId;
+  if (!commentsUrl) return;
+  refreshCommentsButton.disabled = true;
+  commentError.textContent = "";
+  try {
+    commentsChanged(commentStore(await listComments(commentsUrl)));
+  } catch (error) {
+    showCommentError(nodeId, error, "refresh");
+  } finally { refreshCommentsButton.disabled = false; }
+}
+
+newCommentInput.addEventListener("input", () => {
+  if (commentsNodeId !== null) commentDrafts.added.set(commentsNodeId, newCommentInput.value);
+});
+addCommentButton.addEventListener("click", () => void addComment());
+refreshCommentsButton.addEventListener("click", () => void refreshComments());
 
 // Graph editing toolbar. All operations use the same pending Markdown buffer.
 const toolbar = document.createElement("div");
@@ -816,6 +1014,7 @@ void initializeEditor(store, {
   restore: snapshot => {
     source.value = snapshot.markdown_source; savedSource = source.value; updateLines();
     revision = snapshot.revision; applyLayout(positions, snapshot.layout_data);
+    comments = commentStore(snapshot.comments ?? []);
   },
   setStatus: (message, error, signIn) => {
     if (error) showErrorNotice(saveStatus, { message, signIn }, app.dataset.loginUrl);

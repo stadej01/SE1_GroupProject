@@ -316,10 +316,16 @@ The login page sends the email and password to `POST /api/v1/auth/login`. It ret
 | --- | --- |
 | `POST /api/v1/auth/login` | Sign in with `email` and `password`; returns `token`, `user`, and `teams` with their projects |
 | `POST /api/v1/projects` | Create with `name` and `team_id`; returns `201` |
-| `GET /api/v1/projects/<project_id>` | Read Markdown, `revision`, and `layout_data` |
+| `GET /api/v1/projects/<project_id>` | Read Markdown, `revision`, `layout_data`, and `comments` |
 | `PUT /api/v1/projects/<project_id>/save` | Send `markdown_source`, `layout_data.nodes`, and `base_revision`; returns the new revision |
 | `GET /api/v1/projects/<project_id>/export` | Compile the saved Markdown into an indented JSON AST download; returns `422` with a timestamped error log when the Markdown has errors |
 | `POST /api/v1/projects/<project_id>/export` | Same as above, for `markdown_source` sent in the request (unsaved editor text); saves nothing |
+| `GET /api/v1/projects/<project_id>/comments` | List the project's review comments, oldest first |
+| `POST /api/v1/projects/<project_id>/comments` | Add a comment with `node_id` and `body`; returns `201`, or `404` when the node is not in the saved Markdown |
+| `PUT /api/v1/projects/<project_id>/comments/<comment_id>` | Change the `body` of your own comment; sets `edited_at` |
+| `DELETE /api/v1/projects/<project_id>/comments/<comment_id>` | Delete your own comment |
+
+Each comment has `comment_id`, `project_id`, `node_id`, `author_id`, `author_name`, `body`, `created_at`, and `edited_at`. Comments never change the Markdown, the revision, or the content repository, and they are left out of the export. Only team members can read or add them; only the author can change or delete one (others get `403`).
 
 A stale save returns `409`. Failed storage reads or writes return `503`, as does waiting too long for another save to the same branch. The editor displays the reason and keeps unsaved text available.
 
@@ -449,6 +455,7 @@ python manage.py runserver 127.0.0.1:8000 --settings=config.settings
 - The parser uses a regex prototype. The planned Lark parser and full dialogue language are pending.
 - Export compiles the last saved revision. With unsaved changes, the editor asks whether to save first or to export the editor text without saving. The JSON has no top-level `variables` list yet, because the dialogue script has no variable declarations. `[set: ...]` lines are exported in each node's `sequence`.
 - Save stores text and positions without running the parser. Its `diagnostics` stays empty; positions for deleted nodes remain stored.
+- Comments stay stored when their node is removed or renamed, and come back if a node with that ID returns. The editor only shows comments for nodes in the graph. Cleanup will be added together with position cleanup. Other people's new comments appear after **Refresh comments** or reopening the project.
 - Layout direction resets when a project reopens.
 - Browsers do not allow a custom dialog when a tab closes. Only **← Projects** offers save or discard; other ways of leaving use the browser's built-in prompt.
 - Write the first node of a new project in Markdown before adding more nodes through the graph.

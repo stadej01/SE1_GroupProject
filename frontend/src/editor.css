@@ -75,6 +75,19 @@ textarea::selection { background: #cde1fb; }
 .node-edit-panel button {cursor:pointer;}
 .node-edit-help {font-size:12px;}
 #node-edit-error {color:#ae2536;font-size:12px;}
+.node-comments {display:grid; gap:8px; margin-top:14px; padding-top:12px; border-top:1px solid #dfe5eb;}
+.node-comments[hidden] {display:none;}
+.node-comments-header {display:flex; align-items:center; justify-content:space-between; gap:8px;}
+.node-comments-header h4 {margin:0;}
+.node-comment-list {display:grid; gap:8px; margin:0; padding:0; list-style:none;}
+.node-comment {display:grid; gap:4px; padding:8px 10px; background:#f6f8fb; border:1px solid #dfe5eb; border-radius:8px;}
+.node-comment-meta {display:flex; flex-wrap:wrap; align-items:baseline; gap:6px; font-size:12px; color:#55677a;}
+.node-comment-meta strong {color:#18263c;}
+.node-comment-body {margin:0; font-size:13px; white-space:pre-wrap; overflow-wrap:anywhere;}
+.node-comment-actions {display:flex; gap:6px;}
+.node-comment-actions button {font-size:12px; padding:2px 8px;}
+.node-comments-empty {margin:0; font-size:12px; color:#55677a;}
+#node-comment-error {margin:0; color:#ae2536; font-size:12px;}
 
 .graph-edit-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; font-size:12px; }
 .toolbar-menu { position:relative; }
