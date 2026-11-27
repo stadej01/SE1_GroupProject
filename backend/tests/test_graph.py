@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from dialogue_graph import GraphValidationError, build_graph, parse_markdown_to_ast
+from dialogue_graph.validator import check_continuity
 
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -135,7 +136,95 @@ class EdgeCases(unittest.TestCase):
         graph = graph_for("# A\nNarrator: Hello.\n")
 
         self.assertEqual(graph["start_nodes"], [])
+        self.assertEqual(graph["end_nodes"], [])
         self.assertIsNone(graph["start"])
+
+    def test_end_directives_are_returned_and_validated(self):
+        graph = graph_for(
+            '<!-- start: A -->\n<!-- end: B -->\n'
+            '# A\nNarrator: Start.\n<<jump: B>>\n'
+            "# B\nNarrator: Finish.\n"
+        )
+
+        self.assertEqual(graph["end_nodes"], ["B"])
+        for source in (
+            "<!-- end: Missing -->\n# A\n",
+            "<!-- end: A -->\n<!-- end: A -->\n# A\n",
+            "# A\n<!-- end: A -->\n",
+        ):
+            with self.subTest(source=source), self.assertRaises(GraphValidationError):
+                graph_for(source)
+
+    def test_unmarked_terminal_node_is_a_continuity_issue(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n# A\n<<jump: B>>\n# B\nNarrator: End.\n'
+        ))
+
+        self.assertTrue(any(
+            issue["node_id"] == "B" and "not marked as an end node" in issue["message"]
+            for issue in result["issues"]
+        ))
+
+    def test_marked_terminal_node_is_not_a_continuity_issue(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n<!-- end: B -->\n'
+            '# A\n<<jump: B>>\n# B\nNarrator: End.\n'
+        ))
+
+        self.assertEqual(result, {"status": "clean", "issues": []})
+
+    def test_marked_end_node_with_outgoing_link_is_a_continuity_issue(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n<!-- end: A -->\n'
+            "# A\n<<jump: B>>\n# B\nNarrator: End.\n"
+        ))
+
+        self.assertTrue(any(
+            issue["node_id"] == "A" and "marked as an end node" in issue["message"]
+            for issue in result["issues"]
+        ))
+
+    def test_continuity_reports_choice_with_missing_destination(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n# A\nNarrator: Hello.\n* "Go" -> Missing\n'
+        ))
+
+        self.assertEqual(result["status"], "issues")
+        self.assertTrue(any(
+            issue["node_id"] == "A" and issue["line"] == 4
+            and "Missing" in issue["message"]
+            for issue in result["issues"]
+        ))
+
+    def test_continuity_reports_clean_graph(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n<!-- end: B -->\n# A\nNarrator: Hello.\n* "Go" -> B\n'
+            "# B\nNarrator: The end.\n"
+        ))
+
+        self.assertEqual(result, {"status": "clean", "issues": []})
+
+    def test_continuity_detects_cycle_without_recursing(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n# A\nNarrator: A.\n* "Next" -> B\n'
+            '# B\nNarrator: B.\n* "Next" -> C\n'
+            '# C\nNarrator: C.\n* "Back" -> A\n'
+        ))
+
+        self.assertEqual(result["status"], "issues")
+        self.assertTrue(any("A -> B -> C -> A" in issue["message"] for issue in result["issues"]))
+
+    def test_continuity_warns_when_conditional_exits_have_no_fallback(self):
+        result = check_continuity(parse_markdown_to_ast(
+            '<!-- start: A -->\n# A\n[if has_key] <<jump: B>>\n'
+            "# B\nNarrator: End.\n"
+        ))
+
+        self.assertEqual(result["status"], "issues")
+        self.assertTrue(any(
+            issue["node_id"] == "A" and "unconditional fallback" in issue["message"]
+            for issue in result["issues"]
+        ))
 
     def test_missing_target_blocks_graph(self):
         """US-01 AC2: Links to nonexistent nodes prevent graph generation."""

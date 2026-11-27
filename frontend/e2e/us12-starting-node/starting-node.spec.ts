@@ -20,7 +20,7 @@ test("selects and persists one starting node", async ({ page }) => {
   await page.getByRole("button", { name: "Parse Markdown" }).click();
 
   await page.locator(".starting-node-picker summary").click();
-  await page.getByLabel("B", { exact: true }).check();
+  await page.locator("#starting-node-list").getByLabel("B", { exact: true }).check();
   await expect(page.locator('.react-flow__node[data-id="B"] .dlg-node__start')).toHaveText("START");
 
   await page.getByRole("button", { name: "Parse Markdown" }).click();
@@ -43,8 +43,8 @@ test("allows multiple starting nodes", async ({ page }) => {
   await page.getByRole("button", { name: "Parse Markdown" }).click();
 
   await page.locator(".starting-node-picker summary").click();
-  await page.getByLabel("A", { exact: true }).check();
-  await page.getByLabel("B", { exact: true }).check();
+  await page.locator("#starting-node-list").getByLabel("A", { exact: true }).check();
+  await page.locator("#starting-node-list").getByLabel("B", { exact: true }).check();
   await expect(page.locator(".dlg-node__start")).toHaveCount(2);
 
   await page.getByRole("button", { name: "Parse Markdown" }).click();

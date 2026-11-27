@@ -192,7 +192,7 @@ If you pulled new code since the last run, run `./setup.sh` first, or `.\setup.p
 - `Ctrl`/`⌘` + `Enter` parses; `Ctrl`/`⌘` + `S` saves.
 - With unsaved text, graph edits, or moved nodes, **← Projects** asks whether to save or discard. Closing the tab, refreshing, and **Log out** use the browser's own prompt instead.
 
-Use `# Node_ID` for a node, `Speaker: text` for dialogue, `* "Choice" -> Node_ID` for a choice, and `<<jump: Node_ID>>` for a jump. Put `<!-- start: Node_ID -->` before the first heading to mark a starting node. See [the merchant sample](fixtures/merchant.md) for a larger dialogue.
+Use `# Node_ID` for a node, `Speaker: text` for dialogue, `* "Choice" -> Node_ID` for a choice, and `<<jump: Node_ID>>` for a jump. Put `<!-- start: Node_ID -->` before the first heading to mark a starting node, and `<!-- end: Node_ID -->` before the first heading to mark a terminal node. A marked end node may have no outgoing choice or jump without producing a continuity warning. See [the merchant sample](fixtures/merchant.md) for a larger dialogue.
 
 ### Changing the frontend
 

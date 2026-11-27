@@ -9,6 +9,7 @@ export interface GraphNode extends Record<string, unknown> {
   color: string | null;
   preview: string;
   is_start?: boolean;
+  is_end?: boolean;
   metadata?: Record<string, string>;
   dialogue_lines?: { speaker: string; text: string; source_line: number }[];
   source_line: number;
@@ -37,6 +38,7 @@ export interface Diagnostic {
 export interface DialogueGraph {
   snapshot_id: string;
   start_nodes: string[];
+  end_nodes: string[];
   nodes: GraphNode[];
   edges: GraphEdge[];
   diagnostics: Diagnostic[];

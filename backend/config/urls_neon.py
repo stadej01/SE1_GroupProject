@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.urls import include, path
 
-from .views import health, sync
+from .views import continuity, health, sync
 
 
 urlpatterns = [
@@ -13,5 +13,6 @@ urlpatterns = [
     path("api/v1/", include("accounts.urls")),
     path("accounts/", include("accounts.page_urls")),
     path("sync", sync, name="sync"),
+    path("continuity", continuity, name="continuity"),
     path("", include("projects.page_urls")),
 ]
