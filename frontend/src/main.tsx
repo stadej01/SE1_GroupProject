@@ -10,7 +10,7 @@ import { createStore, initializeEditor } from "./project/store";
 import { applyLayout } from "./project/layout";
 import { readCsrfToken } from "./project/csrf";
 import { isDirty, canApplySubmittedSource } from "./project/dirty";
-import { ProjectRequestError, type ProjectSnapshot } from "./project/api";
+import { isMembershipDenied, ProjectRequestError, type ProjectSnapshot } from "./project/api";
 import { projectErrorNotice } from "./project/errors";
 import { showErrorNotice } from "./project/status";
 import { createRequest } from "./project/request";
@@ -75,6 +75,7 @@ let positionVersion = 0;
 let savedPositionVersion = 0;
 let activeSave: Promise<boolean> | null = null;
 let leavingAfterSave = false;
+let projectAccessLost = false;
 
 type UndoSnapshot = {
   graph: Graph;
@@ -458,7 +459,9 @@ async function submitSave(): Promise<boolean> {
   } catch (error) {
     const notice = store.project ? projectErrorNotice(error)
       : { message: error instanceof Error ? error.message : store.failedLabel };
-    if (error instanceof ProjectRequestError && error.status === 409 && conflict) {
+    if (isMembershipDenied(error)) {
+      showAccessLoss();
+    } else if (error instanceof ProjectRequestError && error.status === 409 && conflict) {
       saveStatus.textContent = "";
       conflict.show(notice.message);
     } else {
@@ -466,7 +469,7 @@ async function submitSave(): Promise<boolean> {
     }
     return false;
   } finally {
-    saveButton.disabled = false;
+    saveButton.disabled = projectAccessLost;
     conflict?.setDisabled(false);
   }
 }
@@ -476,6 +479,7 @@ async function submitSave(): Promise<boolean> {
 async function exportJson() {
   if (!exportButton || exportButton.disabled) return;
   if (activeSave) await activeSave;
+  if (projectAccessLost) return;
   let unsaved: string | undefined;
   if (hasUnsavedChanges()) {
     const choice = exportDialog ? await askExportChoice(exportDialog) : "unsaved";
@@ -495,7 +499,9 @@ async function exportJson() {
       : `Exported ${result.filename} with unsaved changes`;
     showDiagnostics(result.warnings);
   } catch (error) {
-    if (error instanceof ExportBlockedError) {
+    if (isMembershipDenied(error)) {
+      showAccessLoss();
+    } else if (error instanceof ExportBlockedError) {
       saveStatus.textContent = "Export blocked by errors";
       showDiagnostics(error.diagnostics);
       element("diagnostics-heading").textContent = "Export blocked";
@@ -503,7 +509,7 @@ async function exportJson() {
     } else {
       showErrorNotice(saveStatus, exportErrorNotice(error), app.dataset.loginUrl);
     }
-  } finally { exportButton.disabled = false; }
+  } finally { exportButton.disabled = projectAccessLost; }
 }
 
 // A save that was already running may not include the newest edits.
@@ -550,12 +556,23 @@ const conflict = conflictPanel && loadLatestDialog ? mountConflictRecovery({
   load: loadLatestVersion,
 }) : null;
 let loadingLatest = false;
+
+function showAccessLoss() {
+  projectAccessLost = true;
+  saveButton.disabled = true;
+  if (exportButton) exportButton.disabled = true;
+  saveStatus.dataset.error = "true";
+  saveStatus.textContent = "Not saved";
+  leaveGuard?.setAccessLost();
+  conflict?.showAccessLoss();
+}
 // Shortcuts wait while a dialog is open or the latest version is loading.
 const shortcutsBlocked = () => Boolean(leaveGuard?.open || loadLatestDialog?.open || loadingLatest);
 
 function setEditorEnabled(enabled: boolean) {
-  source.disabled = parseButton.disabled = saveButton.disabled = !enabled;
-  if (exportButton) exportButton.disabled = !enabled;
+  source.disabled = parseButton.disabled = !enabled;
+  saveButton.disabled = !enabled || projectAccessLost;
+  if (exportButton) exportButton.disabled = !enabled || projectAccessLost;
   toolbar.inert = !enabled;
 }
 
@@ -600,7 +617,10 @@ async function loadLatestVersion(): Promise<boolean> {
       saveStatus.dataset.error = "false";
       updateSaveStatus(`Loaded the latest version (revision ${latest.revision})`);
     },
-    fail: error => showErrorNotice(saveStatus, projectErrorNotice(error, "load"), app.dataset.loginUrl),
+    fail: error => {
+      if (isMembershipDenied(error)) showAccessLoss();
+      else showErrorNotice(saveStatus, projectErrorNotice(error, "load"), app.dataset.loginUrl);
+    },
   });
   if (!snapshot) return false;
   if (snapshot.markdown_source.trim()) await parse(false);

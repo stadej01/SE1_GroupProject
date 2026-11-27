@@ -8,8 +8,9 @@
     {% for team in teams %}
     <section class="team" id="team-{{ team.pk }}" aria-labelledby="team-{{ team.pk }}-name" tabindex="-1">
       <header class="team-header">
-        <h2 id="team-{{ team.pk }}-name">{{ team.name }}</h2>
-        <a class="team-link" href="{% url 'teams:detail' team.pk %}" aria-label="Manage members of {{ team.name }}">Members ({{ team.member_count }})</a>
+        <div><h2 id="team-{{ team.pk }}-name">{{ team.name }}</h2>
+          <span class="member-count">{{ team.member_count }} member{{ team.member_count|pluralize }}</span></div>
+        <a class="team-link" href="{% url 'teams:detail' team.pk %}" aria-label="Manage members of {{ team.name }}">Manage members</a>
       </header>
       <ul class="projects">
         {% for project in team.projects.all %}

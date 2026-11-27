@@ -69,6 +69,17 @@ export function mountLeaveDialog(options: {
   });
 
   return {
+    setAccessLost() {
+      link.hash = "";
+      dialog.querySelector("#leave-dialog-title")!.textContent = "Leave your unsaved draft?";
+      dialog.querySelector("#leave-dialog-help")!.textContent = "You no longer have access to save here. Copy your Markdown before leaving.";
+      saveAndLeave.hidden = true;
+      saveAndLeave.autofocus = false;
+      cancel.textContent = "Stay here";
+      cancel.autofocus = true;
+      discard.textContent = "Leave editor";
+      discard.before(cancel);
+    },
     get open() { return dialog.open; },
     get confirmed() { return confirmed; },
   };

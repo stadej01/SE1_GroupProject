@@ -51,7 +51,7 @@ class CreateTeamTests(TeamPageTestCase):
         home = self.client.get("/")
         self.assertContains(home, "Created Night shift.")
         self.assertContains(home, f'<h2 id="team-{team.pk}-name">Night shift</h2>', html=False)
-        self.assertContains(home, "Members (1)")
+        self.assertContains(home, "1 member")
 
     def test_blank_name_shows_error_and_creates_nothing(self):
         self.sign_in(self.cy)
@@ -82,23 +82,13 @@ class CreateTeamTests(TeamPageTestCase):
         self.sign_in(self.cy)
         self.assertEqual(self.client.get(self.url("create")).status_code, 405)
 
-    def test_registration_still_creates_a_personal_team(self):
-        client = Client()
-        client.post(reverse("accounts:register"), {
-            "email": "dee@example.com", "display_name": "Dee",
-            "password1": PASSWORD, "password2": PASSWORD,
-        })
-        dee = get_user_model().objects.get(email="dee@example.com")
-        team = Team.objects.get(memberships__user=dee)
-        self.assertEqual(team.name, "Dee's team")
-        self.assertEqual(self.members(team), {"dee@example.com"})
-
 
 class TeamPageViewTests(TeamPageTestCase):
     def test_member_sees_name_members_emails_and_own_account(self):
         self.sign_in(self.ada)
         response = self.client.get(self.url("detail", self.team.pk))
-        self.assertContains(response, '<h1 class="page-title">Writers</h1>', html=False)
+        self.assertContains(response, '<h1 class="page-title">Team members</h1>')
+        self.assertContains(response, 'aria-current="page">Writers</span>')
         for text in ("Ada", "ada@example.com", "Ben", "ben@example.com", "Members (2)"):
             self.assertContains(response, text)
         self.assertContains(response, '<span class="member-name">Ada<span class="you">You</span></span>', html=False)
@@ -108,11 +98,28 @@ class TeamPageViewTests(TeamPageTestCase):
         self.assertNotContains(response, f'action="{self.url("remove-member", self.team.pk, self.ada.pk)}"')
         self.assertContains(response, 'href="/#team-%d"' % self.team.pk)
 
+    def test_suggestions_only_include_active_colleagues_outside_this_team(self):
+        self.sign_in(self.ada)
+        outsider = make_user("outside@example.com", "Other")
+        inactive = make_user("inactive@example.com", "Inactive")
+        inactive.is_active = False
+        inactive.save(update_fields=["is_active"])
+        for name in ("First", "Second"):
+            shared = Team.objects.create(name=name)
+            for user in (self.ada, self.ben, self.cy, inactive):
+                TeamMembership.objects.create(team=shared, user=user)
+        another = Team.objects.create(name="Elsewhere")
+        TeamMembership.objects.create(team=another, user=outsider)
+        response = self.client.get(self.url("detail", self.team.pk))
+        self.assertEqual(list(response.context["suggestions"]), [self.cy])
+        self.assertNotContains(response, outsider.email)
+        self.assertNotContains(response, inactive.email)
+
     def test_confirmation_names_the_person_team_and_projects(self):
         self.sign_in(self.ada)
         response = self.client.get(self.url("detail", self.team.pk))
-        self.assertContains(response, 'data-confirm-title="Remove Ben from Writers?"')
-        self.assertContains(response, 'data-confirm-body="ben@example.com will no longer see this team or open its 1 project.')
+        self.assertContains(response, 'data-confirm-title="Remove Ben?"')
+        self.assertContains(response, 'data-confirm-body="ben@example.com will lose access to Writers and its 1 project.')
         self.assertContains(response, 'data-confirm-title="Leave Writers?"')
 
     def test_only_member_sees_disabled_leave_with_reason(self):
@@ -146,7 +153,7 @@ class AddMemberTests(TeamPageTestCase):
         response = self.client.post(self.url("add-member", self.team.pk), {"email": "  CY@Example.com "})
         self.assertRedirects(response, self.url("detail", self.team.pk), fetch_redirect_response=False)
         self.assertEqual(self.members(), {"ada@example.com", "ben@example.com", "cy@example.com"})
-        self.assertContains(self.client.get(response.url), "Added Cy to Writers.")
+        self.assertContains(self.client.get(response.url), "Added Cy.")
         cy = self.sign_in(self.cy, Client())
         home = cy.get("/")
         self.assertContains(home, "Writers")

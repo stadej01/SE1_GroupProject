@@ -15,7 +15,7 @@ class NewTeamForm(forms.ModelForm):
 
 class AddMemberForm(forms.Form):
     email = forms.EmailField(
-        label="Email",
+        label="Registered email",
         max_length=254,
         error_messages={"required": "Enter the email of a registered user."},
         widget=forms.EmailInput(attrs={"autocomplete": "off"}),

@@ -22,7 +22,7 @@ def forbidden(request):
     return render(request, "teams/forbidden.html", status=403)
 
 
-def team_response(request, team, form=None, error=None, status=200):
+def team_response(request, team, form=None, error=None, status=200, unknown_email=False):
     memberships = list(
         team.memberships.select_related("user").order_by("user__display_name", "user__email")
     )
@@ -30,8 +30,10 @@ def team_response(request, team, form=None, error=None, status=200):
         "team": team,
         "memberships": memberships,
         "project_count": team.projects.count(),
+        "suggestions": services.other_teammates(request.user, team),
         "form": form or AddMemberForm(),
         "error": error,
+        "unknown_email": unknown_email,
         "home_url": home_team_url(team.pk),
     }, status=status)
 
@@ -77,12 +79,12 @@ def add_member(request, team_id):
     except services.NotAMember:
         return forbidden(request)
     except services.UnknownEmail:
-        form.add_error("email", "No account uses this email. Ask them to create an account first.")
-        return team_response(request, team, form=form, status=400)
+        form.add_error("email", "No account uses this email. Send them the sign-up link first.")
+        return team_response(request, team, form=form, status=400, unknown_email=True)
     except services.AlreadyMember as duplicate:
         form.add_error("email", str(duplicate))
         return team_response(request, team, form=form, status=400)
-    messages.success(request, f"Added {membership.user.display_name} to {team.name}.")
+    messages.success(request, f"Added {membership.user.display_name}.", extra_tags=f"member-{membership.pk}")
     return redirect("teams:detail", team_id=team.pk)
 
 
@@ -103,7 +105,7 @@ def _remove(request, team, user_id):
     if leaving:
         messages.success(request, f"You left {team.name}.")
         return redirect("pages:home")
-    messages.success(request, f"Removed {removed.display_name} from {team.name}.")
+    messages.success(request, f"Removed {removed.display_name}.")
     return redirect("teams:detail", team_id=team.pk)
 
 

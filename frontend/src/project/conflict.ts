@@ -83,8 +83,14 @@ export function mountConflictRecovery(options: {
     panel.hidden = false;
     message.textContent = notice;
   }
+  function showAccessLoss() {
+    panel.setAttribute("aria-label", "Project access");
+    loadButton.hidden = true;
+    find(panel, "access-loss-help").hidden = false;
+    show("You no longer have access to this project.");
+  }
   function hide() { panel.hidden = true; feedback.textContent = ""; hideFallback(); }
   function setDisabled(disabled: boolean) { copyButton.disabled = loadButton.disabled = disabled; }
 
-  return { show, hide, setDisabled, get visible() { return !panel.hidden; } };
+  return { show, showAccessLoss, hide, setDisabled, get visible() { return !panel.hidden; } };
 }

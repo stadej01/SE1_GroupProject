@@ -15,7 +15,8 @@
     {% if project %}
     <section id="conflict-panel" class="conflict-panel" aria-label="Recover from save conflict" hidden>
       <div class="conflict-actions">
-        <p id="conflict-message" role="status"></p>
+        <div class="recovery-notice"><p id="conflict-message" role="status"></p>
+          <p id="access-loss-help" hidden>Your draft is still here. Copy your Markdown to keep your text and graph edits.</p></div>
         <button id="copy-markdown" type="button">Copy my Markdown</button>
         <button id="load-latest" type="button">Load latest version</button>
         <span id="conflict-feedback" role="status"></span>

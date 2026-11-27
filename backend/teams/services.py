@@ -45,6 +45,14 @@ def create_team(user, name):
     return team
 
 
+def other_teammates(actor, team):
+    other_teams = TeamMembership.objects.filter(user=actor).exclude(team=team).values("team")
+    colleagues = TeamMembership.objects.filter(team__in=other_teams).values("user")
+    return get_user_model().objects.filter(is_active=True, pk__in=colleagues).exclude(
+        pk__in=team.memberships.values("user")
+    ).only("display_name", "email").order_by("display_name", "email")
+
+
 def _locked_team_for(actor, team_id):
     """Lock the team and confirm the actor still belongs to it. Call inside a transaction."""
     team = Team.objects.select_for_update().get(pk=team_id)

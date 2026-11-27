@@ -23,7 +23,10 @@ h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .conflict-panel { display: grid; gap: 8px; padding: 8px 16px; background: #fff8f7; border-bottom: 1px solid #ebc8c3; }
 .conflict-panel[hidden] { display: none; }
 .conflict-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
-#conflict-message { margin: 0 auto 0 0; color: #a23745; font-size: 13px; }
+.recovery-notice { margin-right: auto; }
+#conflict-message { margin: 0; color: #a23745; font-size: 13px; }
+#access-loss-help { margin: 3px 0 0; font-size: 14px; color: #3d4f62; }
+.recovery-notice:has(#access-loss-help:not([hidden])) #conflict-message { font-size: 15px; font-weight: 650; }
 #conflict-feedback { color: #1f5b33; font-size: 12px; }
 .copy-fallback { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: #893d3b; }
 .copy-fallback[hidden] { display: none; }

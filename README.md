@@ -198,9 +198,9 @@ If you pulled new code since the last run, run `./setup.sh` first, or `.\setup.p
 Every project belongs to a team, and every member of a team can open and save its projects. All members have the same rights.
 
 - **New team** on the home page creates a team with you as its only member.
-- **Members** beside a team opens its page: each member's name and email, with **You** on your own account.
-- **Add member** adds someone who already has an account, by email.
-- **Remove** and **Leave team** ask for confirmation. The person removed, or who left, no longer sees the team or can open or save its projects. An editor they already have open keeps its text, but saving fails.
+- **Manage members** opens the team's roster. The **Projects** breadcrumb returns to that team on the home page.
+- Enter a registered email or select a colleague from **From your other teams**, then choose **Add member**. For an unregistered email, **Copy sign-up link** gives you the registration page to share.
+- **Remove** and **Leave team** ask for confirmation. When an open editor loses access, **Copy my Markdown** keeps the local text and applied graph edits before the member leaves the editor.
 - The last member cannot leave or be removed, even when two members try at the same moment.
 - People outside a team get `403` for its page and for any change to its members.
 

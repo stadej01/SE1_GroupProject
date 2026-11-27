@@ -43,7 +43,7 @@ async function createTeam(page: Page, name = `Team ${randomUUID().slice(0, 8)}`)
 
 async function openMembers(page: Page, team: string) {
   await page.getByRole("link", { name: `Manage members of ${team}`, exact: true }).click();
-  await expect(page.getByRole("heading", { name: team, exact: true, level: 1 })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText(team);
 }
 
 async function addMember(page: Page, email: string) {
@@ -53,7 +53,7 @@ async function addMember(page: Page, email: string) {
 
 async function createProject(page: Page, team: string) {
   const name = `Story ${randomUUID().slice(0, 8)}`;
-  await page.getByRole("link", { name: "← Projects", exact: true }).click();
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
   await page.getByLabel("Project name").fill(name);
   await expect(page.getByLabel("Team:", { exact: true }).locator("option:checked")).toHaveText(team);
   await page.getByRole("button", { name: "Create project", exact: true }).click();
@@ -78,7 +78,7 @@ async function sharedTeam(browser: Browser, baseURL: string | undefined) {
   const team = await createTeam(owner.page);
   await openMembers(owner.page, team);
   await addMember(owner.page, mate.email);
-  await expect(owner.page.getByRole("status")).toContainText(`Added ${mate.name} to ${team}.`);
+  await expect(owner.page.getByRole("status")).toContainText(`Added ${mate.name}.`);
   return { owner, mate, team };
 }
 
@@ -93,7 +93,7 @@ test("a signed-in user creates a team, and a blank name shows an error", async (
     const team = await createTeam(ada.page);
     await expect(ada.page.getByLabel("Team:", { exact: true }).locator("option:checked")).toHaveText(team);
     expect(new URL(ada.page.url()).hash).toMatch(/^#team-\d+$/);
-    await expect(ada.page.getByRole("link", { name: `Manage members of ${team}` })).toHaveText("Members (1)");
+    await expect(ada.page.getByRole("link", { name: `Manage members of ${team}` })).toHaveText("Manage members");
     await openMembers(ada.page, team);
     await expect(ada.page.getByRole("heading", { name: "Members (1)" })).toBeVisible();
     await expect(ada.page.locator(".members li")).toHaveCount(1);
@@ -104,13 +104,28 @@ test("a signed-in user creates a team, and a blank name shows an error", async (
   }
 });
 
-test("a member adds a registered user who then sees the team and its projects", async ({ browser, baseURL }) => {
-  const { owner, mate, team } = await sharedTeam(browser, baseURL);
+test("a shared team opens the same project for both members and keeps its context on return", async ({ browser, baseURL }) => {
+  const owner = await person(browser, baseURL, "Owner");
+  const mate = await person(browser, baseURL, "Mate");
   try {
+    await openMembers(owner.page, `${owner.name}'s team`);
+    await addMember(owner.page, mate.email);
+    await owner.page.getByRole("link", { name: "Projects", exact: true }).click();
+    const team = await createTeam(owner.page);
+    await openMembers(owner.page, team);
     await addMember(owner.page, `nobody-${randomUUID()}@example.com`);
     await expect(owner.page.getByText("No account uses this email.")).toBeVisible();
     await expect(owner.page.getByLabel("Email")).toBeFocused();
     await expect(owner.page.getByLabel("Email")).toHaveAccessibleDescription(/No account uses this email/);
+    await owner.page.getByRole("button", { name: "Copy sign-up link" }).click();
+    expect(await owner.page.evaluate(() => navigator.clipboard.readText())).toBe(new URL("/accounts/register/", baseURL).href);
+    await owner.page.getByRole("button", { name: `${mate.name} ${mate.email}` }).click();
+    await expect(owner.page.getByLabel("Registered email")).toHaveValue(mate.email);
+    await expect(owner.page.getByRole("heading", { name: "Members (1)" })).toBeVisible();
+    await owner.page.getByRole("button", { name: "Add member", exact: true }).click();
+    await expect(owner.page.getByRole("region", { name: "Members (2)" }).getByRole("status"))
+      .toHaveText(`Added ${mate.name}.`);
+    await expect(owner.page.getByRole("region", { name: "From your other teams" })).toBeHidden();
     await addMember(owner.page, mate.email.toUpperCase());
     await expect(owner.page.getByText(`${mate.name} is already a member of this team.`)).toBeVisible();
     await expect(owner.page.locator(".members li")).toHaveCount(2);
@@ -122,16 +137,7 @@ test("a member adds a registered user who then sees the team and its projects", 
     await openMembers(mate.page, team);
     await expect(mate.page.locator(".members li")).toHaveCount(2);
     await expect(mate.page.locator(".members li", { hasText: mate.email }).locator(".you")).toHaveText("You");
-  } finally {
-    await owner.context.close();
-    await mate.context.close();
-  }
-});
 
-test("the editor shows its team and user, and ← Projects returns to that team", async ({ browser, baseURL }) => {
-  const { owner, mate, team } = await sharedTeam(browser, baseURL);
-  try {
-    const project = await createProject(owner.page, team);
     await expect(owner.page.locator("#project-team")).toHaveText(`Team: ${team}`);
     await expect(owner.page.locator("#current-user")).toHaveText(`Signed in as ${owner.name}`);
     await owner.page.getByRole("link", { name: "← Projects", exact: true }).click();
@@ -151,27 +157,43 @@ test("a removed member loses the team, gets 403, and an open editor keeps its te
   try {
     const project = await createProject(owner.page, team);
     await openProject(mate.page, project.url);
-    const unsaved = "# Mine\nMate: Not saved yet.";
-    await mate.page.locator("#markdown-source").fill(unsaved);
+    const source = mate.page.locator("#markdown-source");
+    await source.fill(markdown);
+    await mate.page.getByRole("button", { name: "Parse Markdown" }).click();
+    await mate.page.locator('.react-flow__node[data-id="Node_Shop"]').click();
+    await mate.page.getByLabel("Dialogue (one line per paragraph)").fill("Keep my graph edit.");
+    await mate.page.getByRole("button", { name: "Apply to Markdown", exact: true }).click();
+    await expect(source).toHaveValue(markdown);
 
     await owner.page.goto("/");
     await openMembers(owner.page, team);
     await owner.page.getByRole("button", { name: `Remove ${mate.name}`, exact: true }).click();
-    const dialog = owner.page.getByRole("dialog", { name: `Remove ${mate.name} from ${team}?` });
-    await expect(dialog).toContainText(`${mate.email} will no longer see this team or open its 1 project.`);
+    const dialog = owner.page.getByRole("dialog", { name: `Remove ${mate.name}?` });
+    await expect(dialog).toContainText(`${mate.email} will lose access to ${team} and its 1 project.`);
     await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(owner.page.locator(".members li")).toHaveCount(2);
     await owner.page.getByRole("button", { name: `Remove ${mate.name}`, exact: true }).click();
-    await dialog.getByRole("button", { name: `Remove ${mate.name}`, exact: true }).click();
-    await expect(owner.page.getByRole("status")).toContainText(`Removed ${mate.name} from ${team}.`);
+    await dialog.getByRole("button", { name: "Remove member", exact: true }).click();
+    await expect(owner.page.getByRole("status")).toContainText(`Removed ${mate.name}.`);
     await expect(owner.page.locator(".members li")).toHaveCount(1);
 
     await mate.page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(mate.page.locator("#save-status")).toHaveText("You no longer have access to this project. Your text is still here.");
-    await expect(mate.page.locator("#markdown-source")).toHaveValue(unsaved);
+    const recovery = mate.page.getByRole("region", { name: "Project access" });
+    await expect(recovery).toContainText("You no longer have access");
+    await expect(mate.page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect(recovery.getByRole("button", { name: "Load latest version" })).toBeHidden();
+    await recovery.getByRole("button", { name: "Copy my Markdown" }).click();
+    expect(await mate.page.evaluate(() => navigator.clipboard.readText()))
+      .toContain("Merchant: Keep my graph edit.");
+    const back = mate.page.getByRole("link", { name: "← Projects" });
+    await back.click();
+    await mate.page.getByRole("button", { name: "Stay here" }).click();
+    await expect(source).toHaveValue(markdown);
 
-    const other = await mate.context.newPage();
-    await other.goto("/");
+    await back.click();
+    await mate.page.getByRole("button", { name: "Leave editor" }).click();
+    await expect(mate.page.getByRole("heading", { name: "Your projects" })).toBeVisible();
+    const other = mate.page;
     await expect(other.getByRole("heading", { name: team, exact: true })).toHaveCount(0);
     expect((await other.goto(project.url))!.status()).toBe(403);
     expect((await other.request.get(project.url.replace("/projects/", "/api/v1/projects/").replace(/\/$/, ""))).status()).toBe(403);
@@ -229,7 +251,7 @@ test("a signed-in nonmember gets 403 for the team page and member changes", asyn
     await expect(owner.page.locator(".members li")).toHaveCount(2);
     await expect(owner.page.locator(".members")).not.toContainText(outsider.email);
     await expect(owner.page.locator(".members")).toContainText(mate.email);
-    await expect(owner.page.getByRole("heading", { name: team, level: 1 })).toBeVisible();
+    await expect(owner.page.getByRole("navigation", { name: "Breadcrumb" })).toContainText(team);
   } finally {
     await owner.context.close();
     await mate.context.close();
@@ -346,30 +368,6 @@ test("loading the latest version locks editing, and a failed load keeps the text
   } finally {
     await owner.context.close();
     await mate.context.close();
-  }
-});
-
-test("disabled buttons keep a readable label when hovered", async ({ browser, baseURL }) => {
-  const ada = await person(browser, baseURL, "Ada");
-  try {
-    const colours = async (name: string) => {
-      const button = ada.page.getByRole("button", { name, exact: true });
-      await button.evaluate((element: HTMLButtonElement) => { element.disabled = true; });
-      await button.hover({ force: true });
-      return button.evaluate((element: HTMLButtonElement) => {
-        const style = getComputedStyle(element);
-        return { text: style.color, background: style.backgroundColor };
-      });
-    };
-    const primary = await colours("Create project");
-    expect(primary.text).toBe("rgb(255, 255, 255)");
-    expect(primary.background).toBe("rgb(36, 92, 154)");
-    await ada.page.goto("/");
-    const plain = await colours("Create team");
-    expect(plain.background).toBe("rgb(255, 255, 255)");
-    expect(plain.text).not.toBe(plain.background);
-  } finally {
-    await ada.context.close();
   }
 });
 

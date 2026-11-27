@@ -42,12 +42,29 @@
     .team-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
     .team-header h2 { min-width: 0; margin: 0; }
     .team-link { flex: none; font-size: 14px; }
+    .member-count, .team-breadcrumb { font-size: 14px; color: #536579; }
+    .team-breadcrumb { justify-content: flex-start; gap: 9px; margin-bottom: 10px; }
+    .team-breadcrumb span { overflow-wrap: anywhere; }
     .messages { margin: 0 0 20px; }
     .message, .error-banner { margin: 0 0 8px; padding: 10px 14px; border-radius: 6px; border: 1px solid #b9d7c3; background: #eef8f1; color: #1f5b33; overflow-wrap: anywhere; }
     .error-banner { border-color: #ebc8c3; background: #fff8f7; color: #a12636; }
     .back-link { display: inline-block; margin-bottom: 12px; }
     .page-title { overflow-wrap: anywhere; }
     .members { list-style: none; padding: 0; margin: 0; }
+    .members-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; }
+    .members-heading h2, .member-feedback p { margin: 0; }
+    .member-feedback, #signup-feedback { color: #1f5b33; font-size: 14px; overflow-wrap: anywhere; }
+    .member-avatar { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 50%; background: #e8f1fb; color: #1d4f86; font-weight: 650; }
+    .new-member { background: #eef8f1; }
+    .members .member { flex: 1; }
+    .member-action .danger { background: transparent; color: #536579; border-color: transparent; }
+    .member-action .danger:hover:enabled { color: #a12636; background: #fff8f7; border-color: #ebc8c3; }
+    .teammate-suggestions { margin-top: 22px; padding-top: 14px; border-top: 1px solid #e4e9ef; }
+    .teammate-suggestions h3 { font-size: 14px; margin: 0 0 8px; }
+    .suggestion-list { display: grid; gap: 6px; max-height: 240px; overflow-y: auto; padding: 4px; margin: -4px; }
+    .suggestion-list button { display: grid; text-align: left; overflow-wrap: anywhere; }
+    #signup-help { margin-bottom: 14px; }
+    #copy-signup { color: #245c9a; padding: 4px 0; border: none; text-decoration: underline; text-underline-offset: 3px; background: transparent; }
     .members li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid #e4e9ef; }
     .member { display: grid; min-width: 0; }
     .member-name { font-weight: 600; overflow-wrap: anywhere; }
@@ -88,7 +105,7 @@
     {% endif %}
   </header>
   <main>
-    {% if messages %}<div class="messages" role="status">{% for message in messages %}<p class="message">{{ message }}</p>{% endfor %}</div>{% endif %}
+    {% block messages %}{% if messages %}<div class="messages" role="status">{% for message in messages %}<p class="message">{{ message }}</p>{% endfor %}</div>{% endif %}{% endblock %}
     {% block content %}{% endblock %}
   </main>
 </body>
