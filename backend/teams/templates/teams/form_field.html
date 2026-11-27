@@ -1,0 +1,8 @@
+<div class="team-field">
+  {{ field.label_tag }}
+  {{ field }}
+  {{ field.errors }}
+</div>
+{% if field.errors %}
+<script>document.getElementById("{{ field.id_for_label|escapejs }}").focus();</script>
+{% endif %}

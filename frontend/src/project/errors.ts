@@ -2,8 +2,10 @@ import { ProjectRequestError } from "./api";
 
 export interface ErrorNotice { message: string; signIn?: boolean }
 
-export function projectErrorNotice(error: unknown, operation: "save" | "open" = "save"): ErrorNotice {
+// "load" reads the latest version after a conflict; the editor keeps its text.
+export function projectErrorNotice(error: unknown, operation: "save" | "open" | "load" = "save"): ErrorNotice {
   const opening = operation === "open";
+  const loading = operation === "load";
   const retained = opening ? "The project could not be opened." : "Your text is still here.";
   if (!(error instanceof ProjectRequestError)) {
     return { message: `The server had a problem. ${retained}` };
@@ -15,7 +17,7 @@ export function projectErrorNotice(error: unknown, operation: "save" | "open" = 
   if (!isJson) return { message: `The server had a problem (${status}). ${retained}` };
   switch (status) {
     case 409:
-      return { message: `A newer version was saved${revision === undefined ? "" : ` (revision ${revision})`}. Your text is still here. Copy it, then reload.` };
+      return { message: `A newer version was saved${revision === undefined ? "" : ` (revision ${revision})`}. Your text is still here. Copy your Markdown or load the latest version.` };
     case 401:
       return { message: `You are signed out. ${retained}`, signIn: true };
     case 403:
@@ -30,9 +32,11 @@ export function projectErrorNotice(error: unknown, operation: "save" | "open" = 
         : "This project no longer exists. Copy your text." };
     case 503:
       return { message: opening ? "Project storage is not available right now. Refresh later to try opening this project again."
+        : loading ? "Project storage is not available right now. Your text is still here. Try again later."
         : "Project storage is not available right now. Nothing was saved. Try again later." };
     case 400:
       return { message: opening ? "The server could not open this project."
+        : loading ? "The latest version could not be loaded. Your text is still here."
         : "The server could not accept this save. Your text is still here." };
     default:
       return { message: `The server had a problem (${status}). ${retained}` };

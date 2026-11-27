@@ -26,6 +26,11 @@ export class ProjectRequestError extends Error {
   }
 }
 
+export function isMembershipDenied(error: unknown): boolean {
+  return error instanceof ProjectRequestError && error.status === 403 &&
+    error.detail === "You are not a member of this project's team.";
+}
+
 async function projectRequest<T>(url: string, init: RequestInit): Promise<T> {
   let response: Response;
   try {

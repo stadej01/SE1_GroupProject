@@ -1,0 +1,114 @@
+{% extends "accounts/base.html" %}
+{% load static team_display %}
+{% block title %}Members of {{ team.name }} · Dialogue editor{% endblock %}
+{% block messages %}{% endblock %}
+{% block content %}
+<nav class="team-breadcrumb" aria-label="Breadcrumb"><a href="{{ home_url }}">Projects</a><span aria-hidden="true">/</span><span aria-current="page">{{ team.name }}</span></nav>
+<h1 class="page-title">Team members</h1>
+{% if error %}<p class="error-banner" role="alert">{{ error }}</p>{% endif %}
+<div class="home-grid">
+  <section class="panel" aria-labelledby="members-heading">
+    <div class="members-heading">
+      <h2 id="members-heading">Members ({{ memberships|length }})</h2>
+      {% if messages %}<div role="status" class="member-feedback">{% for message in messages %}<p data-highlight="{{ message.extra_tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+    </div>
+    <ul class="members">
+      {% for membership in memberships %}
+      {% with member=membership.user %}
+      <li id="member-{{ membership.pk }}">
+        <span class="member-avatar" aria-hidden="true">{{ member.display_name|initials }}</span>
+        <div class="member">
+          <span class="member-name">{{ member.display_name }}{% if member.pk == user.pk %}<span class="you">You</span>{% endif %}</span>
+          <span class="member-email">{{ member.email }}</span>
+        </div>
+        <div class="member-action">
+          {% if member.pk == user.pk %}
+          <form method="post" action="{% url 'teams:leave' team.pk %}" data-confirm-title="Leave {{ team.name }}?" data-confirm-body="You will lose access to this team{% if project_count %} and its {{ project_count }} project{{ project_count|pluralize }}{% endif %}. Copy any unsaved work before leaving." data-confirm-button="Leave team">
+            {% csrf_token %}
+            <button class="danger" type="submit"{% if memberships|length == 1 %} disabled aria-describedby="last-member-note"{% endif %}>Leave team</button>
+          </form>
+          {% if memberships|length == 1 %}<span id="last-member-note" class="muted">A team needs at least one member.</span>{% endif %}
+          {% else %}
+          <form method="post" action="{% url 'teams:remove-member' team.pk member.pk %}" data-confirm-title="Remove {{ member.display_name }}?" data-confirm-body="{{ member.email }} will lose access to {{ team.name }}{% if project_count %} and its {{ project_count }} project{{ project_count|pluralize }}{% endif %}. Their open editor will keep their draft." data-confirm-button="Remove member">
+            {% csrf_token %}
+            <button class="danger" type="submit" aria-label="Remove {{ member.display_name }}">Remove</button>
+          </form>
+          {% endif %}
+        </div>
+      </li>
+      {% endwith %}
+      {% endfor %}
+    </ul>
+  </section>
+  <section class="panel" aria-labelledby="add-member-heading">
+    <h2 id="add-member-heading">Add member</h2>
+    <form method="post" action="{% url 'teams:add-member' team.pk %}" novalidate>
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      {% include "teams/form_field.html" with field=form.email only %}
+      {% if unknown_email %}
+      <div id="signup-help">
+        <a id="signup-link" href="{% url 'accounts:register' %}">Sign-up link</a>
+        <button type="button" id="copy-signup" hidden>Copy sign-up link</button>
+        <span id="signup-feedback" role="status"></span>
+        <div id="signup-manual" hidden><label for="signup-url">Copy this sign-up link</label><input id="signup-url" readonly></div>
+      </div>
+      {% endif %}
+      <button class="primary" type="submit">Add member</button>
+    </form>
+    {% if suggestions %}
+    <section class="teammate-suggestions" aria-labelledby="suggestions-heading" hidden>
+      <h3 id="suggestions-heading">From your other teams</h3>
+      <div class="suggestion-list">{% for person in suggestions %}
+        <button type="button" data-member-email="{{ person.email }}"><strong>{{ person.display_name }}</strong><span class="member-email">{{ person.email }}</span></button>
+      {% endfor %}</div>
+    </section>
+    {% endif %}
+  </section>
+</div>
+<dialog id="confirm-dialog" class="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+  <h2 id="confirm-title"></h2>
+  <p id="confirm-body"></p>
+  <div class="dialog-actions">
+    <button id="confirm-cancel" type="button" autofocus>Cancel</button>
+    <button id="confirm-submit" class="danger-primary" type="button"></button>
+  </div>
+</dialog>
+<script src="{% static 'teams/members.js' %}" defer></script>
+<script>
+  (() => {
+    // Removing or leaving asks first. Without this script the forms still post directly.
+    const dialog = document.getElementById("confirm-dialog");
+    const submit = document.getElementById("confirm-submit");
+    let pending = null;
+    for (const form of document.querySelectorAll("form[data-confirm-title]")) {
+      form.addEventListener("submit", event => {
+        if (form.dataset.confirmed === "true") return;
+        event.preventDefault();
+        pending = form;
+        document.getElementById("confirm-title").textContent = form.dataset.confirmTitle;
+        document.getElementById("confirm-body").textContent = form.dataset.confirmBody;
+        submit.textContent = form.dataset.confirmButton;
+        dialog.showModal();
+      });
+    }
+    document.getElementById("confirm-cancel").addEventListener("click", () => dialog.close());
+    dialog.addEventListener("close", () => {
+      if (pending && pending.dataset.confirmed !== "true") pending.querySelector("button").focus();
+    });
+    submit.addEventListener("click", () => {
+      if (!pending) return;
+      pending.dataset.confirmed = "true";
+      submit.disabled = true;
+      dialog.close();
+      pending.requestSubmit();
+    });
+    // The Back button can restore this page after a confirmed form left it.
+    window.addEventListener("pageshow", event => {
+      if (!event.persisted) return;
+      submit.disabled = false;
+      for (const form of document.querySelectorAll("form[data-confirmed]")) delete form.dataset.confirmed;
+    });
+  })();
+</script>
+{% endblock %}

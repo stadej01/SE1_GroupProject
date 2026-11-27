@@ -10,7 +10,7 @@ import { createStore, initializeEditor } from "./project/store";
 import { applyLayout } from "./project/layout";
 import { readCsrfToken } from "./project/csrf";
 import { isDirty, canApplySubmittedSource } from "./project/dirty";
-import { ProjectRequestError } from "./project/api";
+import { isMembershipDenied, ProjectRequestError, type ProjectSnapshot } from "./project/api";
 import { projectErrorNotice } from "./project/errors";
 import { showErrorNotice } from "./project/status";
 import { createRequest } from "./project/request";
@@ -20,6 +20,7 @@ import { mountLeaveDialog } from "./project/leaveDialog";
 import { deleteSelection, inspectDeletion } from "./editor/deleteSelection";
 import { ExportBlockedError, downloadBlob, exportErrorNotice, exportProject } from "./project/export";
 import { askExportChoice } from "./project/exportDialog";
+import { loadLatest, mountConflictRecovery } from "./project/conflict";
 import "./editor.css";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -79,6 +80,7 @@ let positionVersion = 0;
 let savedPositionVersion = 0;
 let activeSave: Promise<boolean> | null = null;
 let leavingAfterSave = false;
+let projectAccessLost = false;
 
 type UndoSnapshot = {
   graph: Graph;
@@ -504,6 +506,7 @@ async function submitSave(): Promise<boolean> {
   const submittedSource = pendingMarkdown ?? source.value;
   const submittedPositionVersion = positionVersion;
   saveButton.disabled = true;
+  conflict?.setDisabled(true);
   saveStatus.dataset.error = "false";
   saveStatus.textContent = "Saving…";
   try {
@@ -519,13 +522,25 @@ async function submitSave(): Promise<boolean> {
       graphSource = submittedSource;
     }
     updateSaveStatus(store.savedLabel);
+    conflict?.hide();
     if (applySubmittedSource && !leavingAfterSave) void parse();
     return true;
   } catch (error) {
-    showErrorNotice(saveStatus, store.project ? projectErrorNotice(error)
-      : { message: error instanceof Error ? error.message : store.failedLabel }, app.dataset.loginUrl);
+    const notice = store.project ? projectErrorNotice(error)
+      : { message: error instanceof Error ? error.message : store.failedLabel };
+    if (isMembershipDenied(error)) {
+      showAccessLoss();
+    } else if (error instanceof ProjectRequestError && error.status === 409 && conflict) {
+      saveStatus.textContent = "";
+      conflict.show(notice.message);
+    } else {
+      showErrorNotice(saveStatus, notice, app.dataset.loginUrl);
+    }
     return false;
-  } finally { saveButton.disabled = false; }
+  } finally {
+    saveButton.disabled = projectAccessLost;
+    conflict?.setDisabled(false);
+  }
 }
 
 // Export the saved project. With unsaved changes, ask whether to save first or to
@@ -533,6 +548,7 @@ async function submitSave(): Promise<boolean> {
 async function exportJson() {
   if (!exportButton || exportButton.disabled) return;
   if (activeSave) await activeSave;
+  if (projectAccessLost) return;
   let unsaved: string | undefined;
   if (hasUnsavedChanges()) {
     const choice = exportDialog ? await askExportChoice(exportDialog) : "unsaved";
@@ -552,7 +568,9 @@ async function exportJson() {
       : `Exported ${result.filename} with unsaved changes`;
     showDiagnostics(result.warnings);
   } catch (error) {
-    if (error instanceof ExportBlockedError) {
+    if (isMembershipDenied(error)) {
+      showAccessLoss();
+    } else if (error instanceof ExportBlockedError) {
       saveStatus.textContent = "Export blocked by errors";
       showDiagnostics(error.diagnostics);
       element("diagnostics-heading").textContent = "Export blocked";
@@ -560,7 +578,7 @@ async function exportJson() {
     } else {
       showErrorNotice(saveStatus, exportErrorNotice(error), app.dataset.loginUrl);
     }
-  } finally { exportButton.disabled = false; }
+  } finally { exportButton.disabled = projectAccessLost; }
 }
 
 // A save that was already running may not include the newest edits.
@@ -597,6 +615,89 @@ const leaveGuard = backLink && leaveDialog
   ? mountLeaveDialog({ link: backLink, dialog: leaveDialog, hasUnsavedChanges, save: saveBeforeLeaving })
   : null;
 
+// After a 409 the user keeps their text and either copies it or loads the latest version.
+const conflictPanel = document.querySelector<HTMLElement>("#conflict-panel");
+const loadLatestDialog = document.querySelector<HTMLDialogElement>("#load-latest-dialog");
+const conflict = conflictPanel && loadLatestDialog ? mountConflictRecovery({
+  panel: conflictPanel,
+  dialog: loadLatestDialog,
+  markdown: () => pendingMarkdown ?? source.value,
+  clipboard: () => navigator.clipboard,
+  load: loadLatestVersion,
+}) : null;
+let loadingLatest = false;
+
+function showAccessLoss() {
+  projectAccessLost = true;
+  saveButton.disabled = true;
+  if (exportButton) exportButton.disabled = true;
+  saveStatus.dataset.error = "true";
+  saveStatus.textContent = "Not saved";
+  leaveGuard?.setAccessLost();
+  conflict?.showAccessLoss();
+}
+// Shortcuts wait while a dialog is open or the latest version is loading.
+const shortcutsBlocked = () => Boolean(leaveGuard?.open || loadLatestDialog?.open || loadingLatest);
+
+function setEditorEnabled(enabled: boolean) {
+  source.disabled = parseButton.disabled = !enabled;
+  saveButton.disabled = !enabled || projectAccessLost;
+  if (exportButton) exportButton.disabled = !enabled || projectAccessLost;
+  toolbar.inert = !enabled;
+}
+
+// Both opening a project and loading its latest version replace the whole working copy.
+function restoreSnapshot(snapshot: ProjectSnapshot) {
+  source.value = snapshot.markdown_source;
+  savedSource = source.value;
+  pendingMarkdown = null;
+  updateLines();
+  revision = snapshot.revision;
+  positions.clear();
+  applyLayout(positions, snapshot.layout_data);
+  positionVersion++;
+  savedPositionVersion = positionVersion;
+  graphRenderVersion++;
+  undoStack.length = 0;
+  selectedNodeIds.clear();
+  selectedEdgeIds.clear();
+  refreshDeleteButton();
+}
+
+async function loadLatestVersion(): Promise<boolean> {
+  if (activeSave) await activeSave;
+  const snapshot = await loadLatest({
+    setBusy: busy => {
+      loadingLatest = busy;
+      setEditorEnabled(!busy);
+      element("workspace").inert = nodePanel.inert = busy;
+      conflict?.setDisabled(busy);
+      if (busy) { saveStatus.dataset.error = "false"; saveStatus.textContent = "Loading the latest version…"; }
+    },
+    open: async () => (await store.open())!,
+    apply: latest => {
+      generation++;
+      parseRequest?.abort();
+      emptyGraph("Parse the Markdown to see dialogue nodes, choices, and jumps.");
+      closeNodeEditor();
+      showDiagnostics([]);
+      restoreSnapshot(latest);
+      parseStatus.textContent = "Ready to parse";
+      selection.textContent = "Select a node to find its source.";
+      saveStatus.dataset.error = "false";
+      updateSaveStatus(`Loaded the latest version (revision ${latest.revision})`);
+    },
+    fail: error => {
+      if (isMembershipDenied(error)) showAccessLoss();
+      else showErrorNotice(saveStatus, projectErrorNotice(error, "load"), app.dataset.loginUrl);
+    },
+  });
+  if (!snapshot) return false;
+  if (snapshot.markdown_source.trim()) await parse(false);
+  updateSaveStatus(`Loaded the latest version (revision ${snapshot.revision})`);
+  return true;
+}
+
 document.addEventListener("keydown", (event) => {
 
   // Delete or Backspace: remove selected graph items
@@ -618,7 +719,7 @@ document.addEventListener("keydown", (event) => {
 
     if (
       !isTyping &&
-      !leaveGuard?.open &&
+      !shortcutsBlocked() &&
       (selectedNodeIds.size > 0 || selectedEdgeIds.size > 0)
     ) {
       event.preventDefault();
@@ -649,7 +750,7 @@ document.addEventListener("keydown", (event) => {
     
     event.preventDefault();
 
-    if (!leaveGuard?.open && undoStack.length > 0) {
+    if (!shortcutsBlocked() && undoStack.length > 0) {
       undoLastAction();
     }
     return;
@@ -658,12 +759,12 @@ document.addEventListener("keydown", (event) => {
 
   if (event.key === "Enter") {
     event.preventDefault();
-    if (!leaveGuard?.open) void parse();
+    if (!shortcutsBlocked()) void parse();
   }
 
   if (event.key.toLowerCase() === "s") {
     event.preventDefault();
-    if (!leaveGuard?.open) void save();
+    if (!shortcutsBlocked()) void save();
   }
 });
 
@@ -907,15 +1008,8 @@ toolbar.querySelector<HTMLInputElement>("#rotate-edge-labels")!.addEventListener
 
 emptyGraph("Parse the Markdown to see dialogue nodes, choices, and jumps.");
 void initializeEditor(store, {
-  setEnabled: enabled => {
-    source.disabled = parseButton.disabled = saveButton.disabled = !enabled;
-    if (exportButton) exportButton.disabled = !enabled;
-    toolbar.inert = !enabled;
-  },
-  restore: snapshot => {
-    source.value = snapshot.markdown_source; savedSource = source.value; updateLines();
-    revision = snapshot.revision; applyLayout(positions, snapshot.layout_data);
-  },
+  setEnabled: setEditorEnabled,
+  restore: restoreSnapshot,
   setStatus: (message, error, signIn) => {
     if (error) showErrorNotice(saveStatus, { message, signIn }, app.dataset.loginUrl);
     else { saveStatus.textContent = message; saveStatus.dataset.error = "false"; }

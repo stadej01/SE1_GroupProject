@@ -18,6 +18,19 @@ h1 { min-width: 0; margin: 0; overflow: hidden; font-size: 15px; font-weight: 65
 h2 { font-size: 14px; font-weight: 600; margin: 0; }
 .actions { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex: 0 1 auto; min-width: 0; }
 .actions button, .actions form { flex: none; }
+.team-name { flex: 0 1 auto; min-width: 0; max-width: 30%; overflow: hidden; color: #536579; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.current-user { flex: 0 1 auto; min-width: 0; max-width: 160px; overflow: hidden; color: #344454; font-size: 13px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.conflict-panel { display: grid; gap: 8px; padding: 8px 16px; background: #fff8f7; border-bottom: 1px solid #ebc8c3; }
+.conflict-panel[hidden] { display: none; }
+.conflict-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.recovery-notice { margin-right: auto; }
+#conflict-message { margin: 0; color: #a23745; font-size: 13px; }
+#access-loss-help { margin: 3px 0 0; font-size: 14px; color: #3d4f62; }
+.recovery-notice:has(#access-loss-help:not([hidden])) #conflict-message { font-size: 15px; font-weight: 650; }
+#conflict-feedback { color: #1f5b33; font-size: 12px; }
+.copy-fallback { display: grid; gap: 6px; font-size: 12px; font-weight: 600; color: #893d3b; }
+.copy-fallback[hidden] { display: none; }
+.copy-fallback textarea { height: 160px; padding: 10px 12px; border: 1px solid #ebc8c3; border-radius: 6px; background: #fff; resize: vertical; user-select: text; }
 .save-status { flex: 0 1 auto; min-width: 0; max-width: 480px; color: #68798a; font-size: 12px; line-height: 1.3; text-align: right; }
 .save-status[data-error="true"] { color: #a23745; }
 
@@ -59,7 +72,7 @@ textarea::selection { background: #cde1fb; }
 .diagnostics ul { margin: 8px 0 0; padding-left: 20px; font-size: 12px; line-height: 1.8; }
 .diagnostics button { color: inherit; border: 0; background: transparent; padding: 2px 0; text-align: left; font-weight: 400; white-space: normal; }
 .diagnostics button:hover { text-decoration: underline; }
-@media (max-width: 900px) { .workspace { grid-template-columns: minmax(0, 1fr); } .panel-divider { display: none; } .graph-panel { border-top: 1px solid #dfe5eb; } .app-header { flex-wrap: wrap; } .app-identity { flex-basis: 100%; } .actions { flex-wrap: wrap; flex-basis: 100%; justify-content: flex-start; } .source-editor { height: 400px; } .graph-root { height: 540px; flex: none; } .save-status { flex-basis: 100%; max-width: none; text-align: left; } }
+@media (max-width: 900px) { .workspace { grid-template-columns: minmax(0, 1fr); } .panel-divider { display: none; } .graph-panel { border-top: 1px solid #dfe5eb; } .app-header { flex-wrap: wrap; } .app-identity { flex-basis: 100%; } .actions { flex-wrap: wrap; flex-basis: 100%; justify-content: flex-start; } .source-editor { height: 400px; } .graph-root { height: 540px; flex: none; } .save-status { flex-basis: 100%; max-width: none; text-align: left; } .team-name { max-width: 40%; } .conflict-actions { justify-content: flex-start; } }
 
 .node-edit-panel { position:fixed; right:20px; top:calc(var(--app-header-height) + var(--panel-header-height) + 8px); z-index:1000; width:min(390px,calc(100vw - 40px)); max-height:calc(100vh - var(--app-header-height) - var(--panel-header-height) - 24px); overflow:auto; background:var(--panel, #fff); color:#18263c; padding:18px; border:1px solid #bcc8d6; border-radius:12px; box-shadow:0 10px 35px #0003; }
 .node-edit-panel[hidden] {display:none;}

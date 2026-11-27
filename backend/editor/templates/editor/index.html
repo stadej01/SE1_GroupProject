@@ -9,9 +9,21 @@
 <body>
   <main id="editor" data-sync-url="{{ sync_url }}" data-save-url="{{ save_url }}" data-continuity-url="{{ continuity_url }}" data-open-url="{{ open_url }}" data-revision="{{ revision }}" data-csrf-cookie="{{ csrf_cookie_name }}"{% if login_url %} data-login-url="{{ login_url }}"{% endif %}>
     <header class="app-header">
-      <div class="app-identity">{% if project %}<nav aria-label="Project navigation"><a id="back-to-projects" class="back-link" href="{% url 'pages:home' %}">← Projects</a></nav><span class="crumb-separator" aria-hidden="true">/</span>{% endif %}<h1{% if project %} title="{{ project.name }}"{% endif %}>{% if project %}{{ project.name }}{% else %}Dialogue editor{% endif %}</h1></div>
-      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if export_url %}<button id="export-button" type="button" disabled>Export JSON</button>{% endif %}{% if project %}<form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
+      <div class="app-identity">{% if project %}<nav aria-label="Project navigation"><a id="back-to-projects" class="back-link" href="{{ home_url }}">← Projects</a></nav><span class="crumb-separator" aria-hidden="true">/</span><span id="project-team" class="team-name" title="{{ project.team.name }}"><span class="visually-hidden">Team: </span>{{ project.team.name }}</span><span class="crumb-separator" aria-hidden="true">/</span>{% endif %}<h1{% if project %} title="{{ project.name }}"{% endif %}>{% if project %}{{ project.name }}{% else %}Dialogue editor{% endif %}</h1></div>
+      <div class="actions"><span id="save-status" class="save-status" role="status">{% if open_url %}Opening project…{% else %}Draft loaded{% endif %}</span><button id="save-button" class="primary" type="button" disabled>{% if open_url %}Save{% else %}Save draft{% endif %}</button>{% if export_url %}<button id="export-button" type="button" disabled>Export JSON</button>{% endif %}{% if project %}<span id="current-user" class="current-user" title="{{ user.email }}"><span class="visually-hidden">Signed in as </span>{{ user.display_name }}</span><form id="logout-form" method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>{% endif %}</div>
     </header>
+    {% if project %}
+    <section id="conflict-panel" class="conflict-panel" aria-label="Recover from save conflict" hidden>
+      <div class="conflict-actions">
+        <div class="recovery-notice"><p id="conflict-message" role="status"></p>
+          <p id="access-loss-help" hidden>Your draft is still here. Copy your Markdown to keep your text and graph edits.</p></div>
+        <button id="copy-markdown" type="button">Copy my Markdown</button>
+        <button id="load-latest" type="button">Load latest version</button>
+        <span id="conflict-feedback" role="status"></span>
+      </div>
+      <div id="copy-fallback" class="copy-fallback" hidden><label for="copy-fallback-text">Copying failed. Select this text and copy it.</label><textarea id="copy-fallback-text" readonly spellcheck="false" wrap="off"></textarea></div>
+    </section>
+    {% endif %}
     <div id="workspace" class="workspace">
       <section class="source-panel panel" aria-labelledby="source-heading">
         <header class="panel-header"><div class="panel-title"><h2 id="source-heading"><label for="markdown-source">Markdown</label></h2><span id="line-count" class="badge"></span></div><button id="parse-button" type="button" aria-label="Parse Markdown" disabled>Parse</button></header>
@@ -32,6 +44,11 @@
       <h2 id="leave-dialog-title">Save your changes before leaving?</h2>
       <p id="leave-dialog-help">This project has unsaved changes. If you discard them, they cannot be restored.</p>
       <div class="leave-dialog-actions"><button id="leave-discard" type="button">Discard changes</button><button id="leave-cancel" type="button">Cancel</button><button id="leave-save" class="primary" type="button" autofocus>Save and leave</button></div>
+    </dialog>
+    <dialog id="load-latest-dialog" class="leave-dialog" aria-labelledby="load-latest-title" aria-describedby="load-latest-help">
+      <h2 id="load-latest-title">Load the latest version?</h2>
+      <p id="load-latest-help">Your unsaved Markdown and node positions will be replaced by the latest saved version. Copy your Markdown first to keep it.</p>
+      <div class="leave-dialog-actions"><button id="load-latest-cancel" type="button" autofocus>Cancel</button><button id="load-latest-confirm" class="primary" type="button">Load latest version</button></div>
     </dialog>
     {% endif %}
     {% if export_url %}

@@ -2,12 +2,16 @@
 {% block title %}Your projects · Dialogue editor{% endblock %}
 {% block content %}
 <h1>Your projects</h1>
-{% if teams %}
 <div class="home-grid">
+  {% if teams %}
   <div class="panel">
     {% for team in teams %}
-    <section class="team" aria-labelledby="team-{{ team.pk }}">
-      <h2 id="team-{{ team.pk }}">{{ team.name }}</h2>
+    <section class="team" id="team-{{ team.pk }}" aria-labelledby="team-{{ team.pk }}-name" tabindex="-1">
+      <header class="team-header">
+        <div><h2 id="team-{{ team.pk }}-name">{{ team.name }}</h2>
+          <span class="member-count">{{ team.member_count }} member{{ team.member_count|pluralize }}</span></div>
+        <a class="team-link" href="{% url 'teams:detail' team.pk %}" aria-label="Manage members of {{ team.name }}">Manage members</a>
+      </header>
       <ul class="projects">
         {% for project in team.projects.all %}
         <li><a href="{% url 'pages:project' project.pk %}">{{ project.name }}</a></li>
@@ -18,18 +22,43 @@
     </section>
     {% endfor %}
   </div>
-  <section class="panel" aria-labelledby="new-project-heading">
-    <h2 id="new-project-heading">New project</h2>
-    <form method="post" action="{% url 'pages:create' %}">
-      {% csrf_token %}
-      {{ form.as_p }}
-      <button class="primary" type="submit">Create project</button>
-    </form>
-  </section>
+  {% else %}
+  <div class="panel">
+    <p>You are not on a team yet. Create a team to start writing, or ask a teammate to add your email to theirs.</p>
+  </div>
+  {% endif %}
+  <div class="side-panels">
+    {% if teams %}
+    <section class="panel" aria-labelledby="new-project-heading">
+      <h2 id="new-project-heading">New project</h2>
+      <form method="post" action="{% url 'pages:create' %}">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button class="primary" type="submit">Create project</button>
+      </form>
+    </section>
+    {% endif %}
+    <section class="panel" aria-labelledby="new-team-heading">
+      <h2 id="new-team-heading">New team</h2>
+      <form method="post" action="{% url 'teams:create' %}" novalidate>
+        {% csrf_token %}
+        {{ team_form.non_field_errors }}
+        {% include "teams/form_field.html" with field=team_form.name only %}
+        <button{% if not teams %} class="primary"{% endif %} type="submit">Create team</button>
+      </form>
+    </section>
+  </div>
 </div>
-{% else %}
-<div class="panel">
-  <p>You do not belong to a team yet. Ask an administrator to add you to a team in <a href="{% url 'admin:index' %}">Django admin</a>.</p>
-</div>
+{% if teams and not form.is_bound %}
+<script>
+  // Team links and the create-team redirect both identify the workspace in the fragment.
+  function selectLinkedTeam() {
+    const select = document.getElementById("{{ form.team.id_for_label }}");
+    const linked = Array.from(select.options).find(option => location.hash === "#team-" + option.value);
+    if (linked) select.value = linked.value;
+  }
+  selectLinkedTeam();
+  window.addEventListener("hashchange", selectLinkedTeam);
+</script>
 {% endif %}
 {% endblock %}
