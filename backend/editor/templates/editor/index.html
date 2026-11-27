@@ -14,7 +14,12 @@
     </header>
     {% if project %}
     <section id="conflict-panel" class="conflict-panel" aria-label="Recover from save conflict" hidden>
-      <div class="conflict-actions"><button id="copy-markdown" type="button">Copy my Markdown</button><button id="load-latest" type="button">Load latest version</button><span id="conflict-feedback" role="status"></span></div>
+      <div class="conflict-actions">
+        <p id="conflict-message" role="status"></p>
+        <button id="copy-markdown" type="button">Copy my Markdown</button>
+        <button id="load-latest" type="button">Load latest version</button>
+        <span id="conflict-feedback" role="status"></span>
+      </div>
       <div id="copy-fallback" class="copy-fallback" hidden><label for="copy-fallback-text">Copying failed. Select this text and copy it.</label><textarea id="copy-fallback-text" readonly spellcheck="false" wrap="off"></textarea></div>
     </section>
     {% endif %}

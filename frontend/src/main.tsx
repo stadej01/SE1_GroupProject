@@ -456,9 +456,14 @@ async function submitSave(): Promise<boolean> {
     if (applySubmittedSource && !leavingAfterSave) void parse();
     return true;
   } catch (error) {
-    showErrorNotice(saveStatus, store.project ? projectErrorNotice(error)
-      : { message: error instanceof Error ? error.message : store.failedLabel }, app.dataset.loginUrl);
-    if (error instanceof ProjectRequestError && error.status === 409) conflict?.show();
+    const notice = store.project ? projectErrorNotice(error)
+      : { message: error instanceof Error ? error.message : store.failedLabel };
+    if (error instanceof ProjectRequestError && error.status === 409 && conflict) {
+      saveStatus.textContent = "";
+      conflict.show(notice.message);
+    } else {
+      showErrorNotice(saveStatus, notice, app.dataset.loginUrl);
+    }
     return false;
   } finally {
     saveButton.disabled = false;

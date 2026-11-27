@@ -261,7 +261,7 @@ test("after a 409, a member copies unsaved Markdown with graph edits and loads t
     expect(sourceBefore).not.toContain("Edited in the graph.");
 
     await mate.page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(mate.page.locator("#save-status")).toContainText("A newer version was saved (revision 3).");
+    await expect(mate.page.locator("#conflict-message")).toContainText("A newer version was saved (revision 3).");
     await expect(mate.page.locator("#markdown-source")).toHaveValue(sourceBefore);
     await expect(mate.page.locator(".react-flow__node")).toHaveCount(2);
 
@@ -306,7 +306,7 @@ test("loading the latest version locks editing, and a failed load keeps the text
     const mine = "# Mine\nMate: Keep this.";
     await mate.page.locator("#markdown-source").fill(mine);
     await mate.page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(mate.page.locator("#save-status")).toContainText("A newer version was saved");
+    await expect(mate.page.locator("#conflict-message")).toContainText("A newer version was saved");
 
     // A refused clipboard shows the text to copy by hand.
     await mate.page.evaluate(() => {
@@ -394,7 +394,7 @@ test("after loading the latest version, Undo and Delete cannot bring back the st
     await mate.page.getByRole("button", { name: /^Delete selected/ }).click();
     await expect(mate.page.locator(".react-flow__node")).toHaveCount(1);
     await mate.page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(mate.page.locator("#save-status")).toContainText("A newer version was saved");
+    await expect(mate.page.locator("#conflict-message")).toContainText("A newer version was saved");
 
     await mate.page.getByRole("button", { name: "Load latest version", exact: true }).click();
     await mate.page.getByRole("dialog", { name: "Load the latest version?" })

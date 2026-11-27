@@ -474,7 +474,7 @@ test("Save and leave shows a stale save and keeps the text on the page", async (
   await backLink(page).click();
   await leaveButton(page, "Save and leave").click();
   await expect(leaveDialog(page)).toBeHidden();
-  await expect(page.locator("#save-status")).toContainText("A newer version was saved");
+  await expect(page.locator("#conflict-message")).toContainText("A newer version was saved");
   await expect(page.locator("#markdown-source")).toHaveValue(edited);
   expect(page.url()).toBe(url);
   await expect(page.getByRole("button", { name: "Copy my Markdown", exact: true })).toBeVisible();
@@ -532,7 +532,7 @@ test("rejects a stale save and keeps the second page's text", async ({ page, con
     response.url().endsWith("/save") && response.request().method() === "PUT");
   await second.getByRole("button", { name: "Save", exact: true }).click();
   expect((await rejected).status()).toBe(409);
-  await expect(second.locator("#save-status")).toHaveText(
+  await expect(second.locator("#conflict-message")).toHaveText(
     "A newer version was saved (revision 3). Your text is still here. Copy your Markdown or load the latest version.");
   await expect(second.locator("#markdown-source")).toHaveValue(secondEdit);
   await page.reload();

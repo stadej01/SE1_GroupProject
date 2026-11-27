@@ -48,6 +48,7 @@ export function mountConflictRecovery(options: {
   const find = <T extends HTMLElement>(root: ParentNode, id: string) => root.querySelector<T>(`#${id}`)!;
   const copyButton = find<HTMLButtonElement>(panel, "copy-markdown");
   const loadButton = find<HTMLButtonElement>(panel, "load-latest");
+  const message = find(panel, "conflict-message");
   const feedback = find(panel, "conflict-feedback");
   const fallback = find(panel, "copy-fallback");
   const fallbackText = find<HTMLTextAreaElement>(panel, "copy-fallback-text");
@@ -78,7 +79,10 @@ export function mountConflictRecovery(options: {
     if (await options.load()) hide();
   });
 
-  function show() { panel.hidden = false; }
+  function show(notice: string) {
+    panel.hidden = false;
+    message.textContent = notice;
+  }
   function hide() { panel.hidden = true; feedback.textContent = ""; hideFallback(); }
   function setDisabled(disabled: boolean) { copyButton.disabled = loadButton.disabled = disabled; }
 
