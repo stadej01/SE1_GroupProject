@@ -1,0 +1,4 @@
+# The hosted test environment adds a production web server and static file serving.
+-r requirements.txt
+gunicorn==27.0.1
+whitenoise==6.12.0
