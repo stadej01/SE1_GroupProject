@@ -186,7 +186,10 @@ test("Connections adds and deletes a link, and only one toolbar panel stays open
   await expect(page.locator("#starting-node-list")).toBeHidden();
   await connections.click();
   await expect(page.locator("#connection-from")).toBeVisible();
-  await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+  // Click below the open menu, which can cover the top of the canvas.
+  const pane = page.locator(".react-flow__pane");
+  const { width, height } = (await pane.boundingBox())!;
+  await pane.click({ position: { x: Math.floor(width / 2), y: height - 32 } });
   await expect(page.locator("#connection-from")).toBeHidden();
 });
 
