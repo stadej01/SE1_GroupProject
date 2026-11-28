@@ -67,6 +67,7 @@ function makeGraph(): DialogueGraph {
   return {
     snapshot_id: "test",
     start_nodes: ["A"],
+    end_nodes: [],
     diagnostics: [],
     nodes: ["A", "B", "C", "D"].map(id => ({
       id,
