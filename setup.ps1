@@ -47,8 +47,4 @@ try {
   Pop-Location
 }
 
-if (Test-Path (Join-Path $root ".env")) {
-  Write-Output "`nSetup finished. Start the app with .\start.ps1"
-} else {
-  Write-Output "`nSetup finished. Next, create .env as README.md describes, then start the app with .\start.ps1"
-}
+Write-Output "`nSetup finished."

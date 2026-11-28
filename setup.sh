@@ -25,8 +25,4 @@ fi
 
 (cd "$root/frontend" && npm ci && npm run build)
 
-if [ -f "$root/.env" ]; then
-  printf '\nSetup finished. Start the app with ./start.sh\n'
-else
-  printf '\nSetup finished. Next, create .env as README.md describes, then start the app with ./start.sh\n'
-fi
+printf '\nSetup finished.\n'
