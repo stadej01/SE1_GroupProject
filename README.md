@@ -206,9 +206,7 @@ In a second terminal, from `frontend/`, run `npm run dev` on either platform. It
 ```bash
 cd backend
 source .venv/bin/activate
-python manage.py test accounts teams config projects --settings=config.settings_auth_test
-python manage.py test editor --settings=config.settings
-python -m unittest discover -s tests -p 'test_*.py'
+python manage.py test --settings=config.settings_auth_test
 cd ../frontend
 npm run typecheck
 npm test
@@ -223,9 +221,7 @@ npm run test:e2e
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-python manage.py test accounts teams config projects --settings=config.settings_auth_test
-python manage.py test editor --settings=config.settings
-python -m unittest discover -s tests -p 'test_*.py'
+python manage.py test --settings=config.settings_auth_test
 cd ../frontend
 npm run typecheck
 npm test
@@ -284,10 +280,10 @@ SQLite and memory storage cannot prove the locks between backend processes. [Thi
 | Module | Use |
 | --- | --- |
 | `config.settings_neon` | Local app with accounts, teams, projects, Neon, and GitHub |
-| `config.settings_auth_test` | Automated account and project tests with temporary SQLite |
+| `config.settings_auth_test` | All automated backend tests with temporary SQLite |
 | `config.settings_e2e` | Browser checks with file-based SQLite and memory storage |
 | `config.settings_integration` | Lock checks with a local PostgreSQL and a test branch |
-| `config.settings` | Old SQLite editor demo and its tests; `manage.py` default |
+| `config.settings` | Old SQLite editor demo; `manage.py` default |
 
 `manage.py` alone starts the old demo, so include `--settings=config.settings_neon` when you run it for the full app. Only the test settings use memory storage.
 

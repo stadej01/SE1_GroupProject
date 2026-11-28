@@ -12,6 +12,9 @@ from .assets import frontend_assets
 
 VALID = '# A\nNarrator: Hello.\n* "Go" -> B\n# B\nNarrator: Goodbye.'
 
+# These tests cover the local demo editor, whose routes are in config.urls.
+# The shared test settings route "/" to the project pages instead.
+@override_settings(ROOT_URLCONF="config.urls")
 class EditorTests(TestCase):
     @override_settings(CSRF_COOKIE_NAME="custom_demo_csrf")
     def test_editor_uses_configured_csrf_cookie_without_project_login_url(self):
