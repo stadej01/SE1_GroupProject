@@ -173,6 +173,145 @@ class BrokenScriptExport(unittest.TestCase):
         self.assertEqual(log["diagnostics"][0]["line"], None)
         self.assertTrue(log["detected_at"].endswith("Z"))
 
+class US34VariableExport(unittest.TestCase):
+
+    def test_preserves_variable_definitions(self):
+        md = """<!-- start: Node_A -->
+[var: global boolean has_key = false]
+# Node_A
+[var: local integer coins = 10]
+Narrator: Welcome!
+"""
+        export, _ = compile_markdown(md)
+
+        self.assertEqual(export["variables"], [
+            {
+                "name": "has_key",
+                "type": "boolean",
+                "scope": "global",
+                "initial_value": False
+            },
+            {
+                "name": "coins",
+                "type": "integer",
+                "scope": "local",
+                "initial_value": 10,
+                "node_id": "Node_A"
+            }
+        ])
+        
+    def test_invalid_integer_fails_with_location(self):
+        md = """<!-- start: Node_A -->
+[var: global integer coins = ten]
+# Node_A
+Narrator: Hello!
+"""
+        _, diagnostics = compile_errors(md)
+
+        error = next(
+            item for item in diagnostics
+            if "coins" in item["message"]
+        )
+
+        self.assertEqual(error["line"], 2)
+        self.assertIn("integer", error["message"])
+
+    def test_preserves_string_variable(self):
+        md = """<!-- start: Node_A -->
+[var: global string player_name = "Alex"]
+# Node_A
+Narrator: Welcome!
+"""
+        export, _ = compile_markdown(md)
+
+        self.assertEqual(export["variables"][0], {
+            "name": "player_name",
+            "type": "string",
+            "scope": "global",
+            "initial_value": "Alex"
+        })
+
+    def test_global_variable_shared_across_nodes(self):
+        md = """<!-- start: Node_A -->
+[var: global boolean has_key = false]
+# Node_A
+[set: has_key = true]
+<<jump: Node_B>>
+# Node_B
+[set: has_key = false]
+Narrator: Goodbye!
+"""
+        export, _ = compile_markdown(md)
+
+        node_a = export["nodes"][0]
+        node_b = export["nodes"][1]
+
+        mutation_a = node_a["sequence"][0]
+        mutation_b = node_b["sequence"][0]
+
+        self.assertEqual(mutation_a["var"], "has_key")
+        self.assertEqual(mutation_b["var"], "has_key")
+
+        self.assertEqual(mutation_a["scope"], "global")
+        self.assertEqual(mutation_b["scope"], "global")
+
+        self.assertEqual(len(export["variables"]), 1)
+
+    def test_choice_effect_subtracts_coins(self):
+        md = """<!-- start: Node_Shop -->
+[var: global integer coins = 10]
+# Node_Shop
+* "Buy an apple" -> Node_Buy
+[effect: coins -= 5]
+* "Leave" -> Node_Exit
+# Node_Buy
+Narrator: Enjoy your apple!
+# Node_Exit
+Narrator: Goodbye!
+"""
+        export, _ = compile_markdown(md)
+
+        shop = export["nodes"][0]
+        buy = shop["choices"][0]
+        leave = shop["choices"][1]
+
+        # Initial value remains unchanged
+        self.assertEqual(
+            export["variables"][0]["initial_value"], 10
+        )
+
+        # Only buying the apple subtracts coins
+        self.assertEqual(buy["effects"], [
+            {
+                "var": "coins",
+                "scope": "global",
+                "op": "subtract",
+                "value": 5
+            }
+        ])
+
+        self.assertEqual(leave.get("effects", []), [])
+
+    def test_invalid_boolean_choice_effect(self):
+        md = """<!-- start: Node_A -->
+[var: global boolean has_key = false]
+# Node_A
+* "Use key" -> Node_B
+[effect: has_key -= 5]
+# Node_B
+Narrator: Goodbye!
+"""
+        _, diagnostics = compile_errors(md)
+
+        error = next(
+            item for item in diagnostics
+            if "has_key" in item["message"]
+        )
+
+        self.assertEqual(error["line"], 4)
+        self.assertEqual(error["node_id"], "Node_A")
+        self.assertIn("boolean", error["message"])
+        self.assertIn("Use key", error["message"])
 
 if __name__ == "__main__":
     unittest.main()

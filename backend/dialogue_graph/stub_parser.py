@@ -19,6 +19,13 @@ CHOICE = re.compile(r'^\*\s*' + CONDITION + r'"(?P<text>[^"]*)"\s*->\s*(?P<targe
 JUMP = re.compile(r"^" + CONDITION + r"<<jump:\s*(?P<target>\w+)\s*>>\s*$")
 SET = re.compile(r"^\[set:\s*(?P<var>\w+)\s*=\s*(?P<expr>[^\]]+?)\s*\]\s*$")
 DIALOGUE = re.compile(r"^(?P<speaker>\w[\w ]*?):\s+(?P<text>.+)$")
+VARIABLE = re.compile(
+    r"^\[var:\s*(?P<scope>global|local)\s+"
+    r"(?P<type>boolean|integer|string)\s+"
+    r"(?P<name>[A-Za-z_]\w*)\s*=\s*"
+    r"(?P<value>[^\]]+?)\s*\]$"
+)
+EFFECT = re.compile(r"^\[effect:\s*(?P<var>\w+)\s*-=\s*(?P<value>\d+)\s*\]$")
 
 
 def _metadata(body):
@@ -31,6 +38,7 @@ def _metadata(body):
 
 def parse_markdown_to_ast(markdown_source):
     nodes, diagnostics = [], []
+    variables = []
     current = None
     start_nodes, start_lines = [], []
     end_nodes, end_lines = [], []
@@ -64,6 +72,27 @@ def parse_markdown_to_ast(markdown_source):
                 start_lines.append(lineno)
             continue
 
+        if m := VARIABLE.match(line):
+            if m["scope"] == "local" and current is None:
+                diagnostics.append({
+                    "severity": "error",
+                    "line": lineno,
+                    "message": "Local variables must be declared inside a node."
+                })
+                continue
+
+            variable = {
+                "name": m["name"],
+                "type": m["type"],
+                "scope": m["scope"],
+                "initial_value": m["value"].strip(),
+                "source_line": lineno
+            }
+
+            if m["scope"] == "local":
+                variable["node_id"] = current["id"]
+
+            variables.append(variable)
         if m := END.match(line):
             if current is not None:
                 diagnostics.append({"severity": "error", "line": lineno, "node_id": current["id"],
@@ -99,7 +128,22 @@ def parse_markdown_to_ast(markdown_source):
         if m := CHOICE.match(line):
             current["choices"].append({"text": m["text"], "target": m["target"],
                                        "condition": m["cond"], "line_id": line_id,
-                                       "source_line": lineno})
+                                       "source_line": lineno, "effects": []})
+        elif m := EFFECT.match(line):
+            if not current["choices"] or current["choices"][-1]["source_line"] != lineno - 1:
+                diagnostics.append({
+                    "severity": "error",
+                    "line": lineno,
+                    "node_id": current["id"],
+                    "message": "An effect must immediately follow a choice."
+                })
+            else:
+                current["choices"][-1]["effects"].append({
+                    "var": m["var"],
+                    "op": "subtract",
+                    "value": m["value"],
+                    "source_line": lineno
+                })
         elif m := JUMP.match(line):
             current["sequence"].append({"type": "jump", "target": m["target"],
                                         "condition": m["cond"], "source_line": lineno})
@@ -119,6 +163,9 @@ def parse_markdown_to_ast(markdown_source):
     if not nodes:
         diagnostics.append({"severity": "error", "line": 1,
                             "message": "Add at least one '# Node_ID' header."})
-    return {"nodes": nodes, "start_nodes": start_nodes, "start_lines": start_lines,
-            "end_nodes": end_nodes, "end_lines": end_lines, "diagnostics": diagnostics,
+    return {"nodes": nodes,
+            "start_nodes": start_nodes, "start_lines": start_lines,
+            "end_nodes": end_nodes, "end_lines": end_lines,
+            "variables": variables, 
+            "diagnostics": diagnostics,
             "snapshot_id": hashlib.sha256(markdown_source.encode("utf-8")).hexdigest()}

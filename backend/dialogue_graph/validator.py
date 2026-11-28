@@ -1,3 +1,5 @@
+import re
+import json
 """Structural checks for the temporary parser. Expressions are not evaluated."""
 
 class GraphValidationError(ValueError):
@@ -7,6 +9,33 @@ class GraphValidationError(ValueError):
 
 def validate_graph_integrity(ast):
     diagnostics = list(ast.get("diagnostics", []))
+    # US-34: Validate variable initial values
+    for variable in ast.get("variables", []):
+        name = variable["name"]
+        var_type = variable["type"]
+        value = variable["initial_value"]
+
+        valid = False
+
+        if var_type == "integer":
+            valid = re.fullmatch(r"[+-]?[0-9]+", value) is not None
+
+        if var_type == "boolean":
+            valid = value.lower() in ("true", "false")
+
+        if var_type == "string":
+            try:
+                valid = isinstance(json.loads(value), str)
+            except (json.JSONDecodeError, TypeError):
+                valid = False
+
+        if not valid:
+            diagnostics.append({
+                "severity": "error",
+                "line": variable["source_line"],
+                "node_id": variable.get("node_id"),
+                "message": f"Variable '{name}' has invalid {var_type} value '{value}'."
+            })
     seen = set()
     for node in ast["nodes"]:
         if node["id"] in seen:
@@ -24,6 +53,43 @@ def validate_graph_integrity(ast):
             if not choice["text"].strip():
                 diagnostics.append({"severity": "error", "line": choice["source_line"],
                     "node_id": node["id"], "message": "A choice must have nonblank text."})
+             # US-34 AC5: Validate choice effect types
+            for effect in choice.get("effects", []):
+                variable = None
+
+                # Find a matching global variable
+                for var in ast.get("variables", []):
+                    if var["name"] == effect["var"] and var["scope"] == "global":
+                        variable = var
+
+                # A matching local variable takes priority
+                for var in ast.get("variables", []):
+                    if (var["name"] == effect["var"]
+                        and var["scope"] == "local"
+                        and var.get("node_id") == node["id"]):
+                        variable = var
+
+                if variable is None:
+                    diagnostics.append({
+                        "severity": "error",
+                        "line": choice["source_line"],
+                        "node_id": node["id"],
+                        "message": f"Choice '{choice['text']}' references undeclared variable '{effect['var']}'."
+                    })
+                    continue
+
+                if effect["op"] == "subtract" and variable["type"] != "integer":
+                    diagnostics.append({
+                        "severity": "error",
+                        "line": choice["source_line"],
+                        "node_id": node["id"],
+                        "message": (
+                            f"Choice '{choice['text']}' cannot subtract from "
+                            f"{variable['type']} variable '{effect['var']}'. "
+                            f"Effect is on line {effect['source_line']}; "
+                            "subtraction requires an integer."
+                        )
+                    })
     start_nodes = ast.get("start_nodes", [])
     if not start_nodes:
         diagnostics.append({"severity": "warning",
