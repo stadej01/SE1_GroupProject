@@ -31,6 +31,18 @@ export function setStartNodes(source: string, ids: string[]): string {
   return [...uniqueIds.map(id => `<!-- start: ${id} -->`), ...retainedLines].join("\n");
 }
 
+/** Replace the document-level end-node directives. */
+export function setEndNodes(source: string, ids: string[]): string {
+  const lines = source.split("\n");
+  const retainedLines = lines.filter(line => !/^\s*<!--\s*end:\s*\w+\s*-->\s*$/.test(line));
+  const uniqueIds = [...new Set(ids)];
+  for (const id of uniqueIds) {
+    if (!/^\w+$/.test(id)) throw new Error("End node ID must contain only letters, numbers, or underscores.");
+    if (!lines.some(line => line.trim() === `# ${id}`)) throw new Error(`End node ${id} does not exist in the current draft.`);
+  }
+  return [...uniqueIds.map(id => `<!-- end: ${id} -->`), ...retainedLines].join("\n");
+}
+
 /** Add a connection inside the source node, before the next header. */
 export function appendConnection(source: string, from: string, to: string, kind: EdgeKind, label: string): string {
   if (!locateNode(source, to)) throw new Error("Target node does not exist.");

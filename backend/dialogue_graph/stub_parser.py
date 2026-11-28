@@ -9,6 +9,7 @@ import re
 
 HEADER = re.compile(r"^#\s+(?P<id>\w+)\s*$")
 START = re.compile(r"^<!--\s*start:\s*(?P<id>\w+)\s*-->$")
+END = re.compile(r"^<!--\s*end:\s*(?P<id>\w+)\s*-->$")
 COMMENT_ONLY = re.compile(r"^<!--(?P<body>.*?)-->\s*$")
 META_PAIR = re.compile(r"^\s*(?P<k>[a-z_]+)\s*:\s*(?P<v>[\w-]+)\s*$")
 FIELD = re.compile(r"^@(?P<key>[a-z_][a-z_0-9]*)\s*:\s*(?P<value>.*)$")
@@ -40,6 +41,7 @@ def parse_markdown_to_ast(markdown_source):
     variables = []
     current = None
     start_nodes, start_lines = [], []
+    end_nodes, end_lines = [], []
 
     # Match browser textarea newlines; splitlines() also splits Unicode separators.
     lines = markdown_source.replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -91,6 +93,16 @@ def parse_markdown_to_ast(markdown_source):
                 variable["node_id"] = current["id"]
 
             variables.append(variable)
+        if m := END.match(line):
+            if current is not None:
+                diagnostics.append({"severity": "error", "line": lineno, "node_id": current["id"],
+                                    "message": "The end node directive must appear before the first node."})
+            elif m["id"] in end_nodes:
+                diagnostics.append({"severity": "error", "line": lineno,
+                                    "node_id": m["id"], "message": f'End node {m["id"]} is designated more than once.'})
+            else:
+                end_nodes.append(m["id"])
+                end_lines.append(lineno)
             continue
 
         if current is None:
@@ -151,5 +163,9 @@ def parse_markdown_to_ast(markdown_source):
     if not nodes:
         diagnostics.append({"severity": "error", "line": 1,
                             "message": "Add at least one '# Node_ID' header."})
-    return {"nodes": nodes, "start_nodes": start_nodes, "start_lines": start_lines, "variables": variables, "diagnostics": diagnostics,
+    return {"nodes": nodes,
+            "start_nodes": start_nodes, "start_lines": start_lines,
+            "end_nodes": end_nodes, "end_lines": end_lines,
+            "variables": variables, 
+            "diagnostics": diagnostics,
             "snapshot_id": hashlib.sha256(markdown_source.encode("utf-8")).hexdigest()}

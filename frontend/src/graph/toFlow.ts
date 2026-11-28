@@ -281,6 +281,7 @@ export function toFlow(
   const backEdges = findBackEdges(graph);
   const auto = layout(graph, backEdges);
   const starts = startNodeIds(graph);
+  const ends = new Set(graph.end_nodes);
 
   const nodes: FlowNode[] = graph.nodes.map((node) => {
     const position = auto.get(node.id)!;
@@ -296,6 +297,7 @@ export function toFlow(
       data: {
         ...node,
         is_start: starts.has(node.id),
+        is_end: ends.has(node.id),
       },
       style: { width: NODE_W, height: nodeHeight(node) },
     };
