@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Check the configuration and database, then start the full app.
-# It never writes .env, never migrates, and never clears data.
+# Start a local PR review, or select the existing cloud-backed setup with --neon.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,9 +11,15 @@ fail() {
   exit 1
 }
 
+if [ "$#" -eq 0 ]; then
+  "$root/setup.sh"
+  exec "$python" "$root/backend/start_review.py"
+fi
+[ "$#" -eq 1 ] && [ "$1" = "--neon" ] || fail "Usage: ./start.sh [--neon]"
+
 [ -x "$python" ] || fail "Run ./setup.sh first."
 [ -f "$root/backend/editor/static/editor/dist/manifest.json" ] || fail "Frontend assets are missing. Run ./setup.sh first."
-[ -f "$root/.env" ] || fail "No .env found. Create it as README.md describes, or put the shared .env you received beside README.md."
+[ -f "$root/.env" ] || fail "No .env found. See the Neon setup in README.md."
 
 cd "$root/backend"
 "$python" manage.py check "$settings" || exit 1
@@ -22,7 +27,7 @@ cd "$root/backend"
 # A pending migration exits silently; a database error prints its reason.
 if ! output="$("$python" manage.py migrate --check "$settings" 2>&1)"; then
   if [ -z "$output" ]; then
-    fail "The database has unapplied migrations. In your own environment, confirm DATABASE_URL, then run from backend/: python manage.py migrate --settings=config.settings_neon. With a shared .env, ask its maintainer."
+    fail "The database has unapplied migrations. Ask the database maintainer to apply the migrations described in README.md."
   fi
   printf '%s\n' "$output" | tail -n 3 >&2
   fail "Could not read the database. Check DATABASE_URL in .env."

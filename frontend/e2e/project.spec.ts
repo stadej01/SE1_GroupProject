@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, test, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 const markdown = `<!-- start: Node_Greeting -->
 # Node_Greeting
@@ -43,6 +44,13 @@ async function parse(page: Page) {
   await page.getByRole("button", { name: "Parse Markdown" }).click();
   await expect(page.locator(".react-flow__node")).toHaveCount(2);
   await expect(page.locator(".react-flow__edge")).toHaveCount(2);
+}
+
+async function expectInsideWindow(locator: Locator) {
+  const box = (await locator.boundingBox())!;
+  const width = await locator.page().evaluate(() => document.documentElement.clientWidth);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
 }
 
 async function save(page: Page) {
@@ -149,10 +157,15 @@ test("Connections adds and deletes a link, and only one toolbar panel stays open
   const connections = page.locator("#connections-summary");
   await expect(connections).toHaveText("Connections (2)");
   await expect(page.locator("#connection-from")).toBeHidden();
+  const graphLeft = () => page.locator("#graph-panel-header").evaluate(header => header.getBoundingClientRect().left);
+  const left = await graphLeft();
 
+  // Typing right after opening must not scroll the page sideways to reach a panel still off screen.
   await connections.click();
   await page.locator("#connection-from").fill("Node_Greeting");
   await page.locator("#connection-to").fill("Node_Shop");
+  await expectInsideWindow(page.locator(".connections-panel"));
+  expect(await graphLeft()).toBe(left);
   await page.locator("#connection-kind").selectOption("jump");
   await page.getByRole("button", { name: "+ Connect nodes", exact: true }).click();
   await expect(page.locator(".react-flow__edge")).toHaveCount(3);
@@ -173,8 +186,27 @@ test("Connections adds and deletes a link, and only one toolbar panel stays open
   await expect(page.locator("#starting-node-list")).toBeHidden();
   await connections.click();
   await expect(page.locator("#connection-from")).toBeVisible();
-  await page.locator(".react-flow__pane").click({ position: { x: 20, y: 20 } });
+  // Click below the open menu, which can cover the top of the canvas.
+  const pane = page.locator(".react-flow__pane");
+  const { width, height } = (await pane.boundingBox())!;
+  await pane.click({ position: { x: Math.floor(width / 2), y: height - 32 } });
   await expect(page.locator("#connection-from")).toBeHidden();
+});
+
+test("Export JSON downloads the saved dialogue as a JSON file", async ({ page }) => {
+  await register(page);
+  await createProject(page);
+  await parse(page);
+  await save(page);
+
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export JSON", exact: true }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toMatch(/\.json$/);
+  const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
+  expect(exported.start_nodes).toEqual(["Node_Greeting"]);
+  expect(exported.nodes.map((node: { id: string }) => node.id)).toEqual(["Node_Greeting", "Node_Shop"]);
+  await expect(page.locator("#save-status")).toHaveText(`Exported ${download.suggestedFilename()}`);
 });
 
 test("selecting a node or connection marks its Markdown, and key presses leave the text alone", async ({ page }) => {

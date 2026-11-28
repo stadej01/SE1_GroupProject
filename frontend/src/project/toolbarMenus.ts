@@ -18,13 +18,17 @@ export function mountToolbarMenus(toolbar: HTMLElement): void {
     panel.style.left = `${-panelShift(box.left, box.width, document.documentElement.clientWidth)}px`;
   }
 
-  for (const menu of menus) {
-    menu.addEventListener("toggle", () => {
-      if (!menu.open) return;
+  // The toggle event fires a task later; until then a panel near the right
+  // edge sits off screen, and focusing a field inside it scrolls the page.
+  const opened = new MutationObserver(records => {
+    for (const { target } of records) {
+      const menu = target as HTMLDetailsElement;
+      if (!menu.open) continue;
       for (const other of menus) if (other !== menu) other.open = false;
       keepOnScreen(menu);
-    });
-  }
+    }
+  });
+  for (const menu of menus) opened.observe(menu, { attributes: true, attributeFilter: ["open"] });
   // Capture runs first because the graph canvas can stop pointer events.
   document.addEventListener("pointerdown", event => {
     for (const menu of menus) if (menu.open && !menu.contains(event.target as Node)) menu.open = false;
